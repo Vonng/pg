@@ -12,7 +12,7 @@ type: "post"
 
 # 纯PostgreSQL-5分钟实现推荐系统
 
-推荐系统大家都熟悉，猜你喜欢，淘宝个性化什么的，前年双十一搞了个大新闻，拿了CEO特别贡献奖。
+推荐系统大家都熟悉，猜你喜欢，淘宝个性化什么的，前年双十一搞了个大新闻，还拿了CEO特别贡献奖。
 
 今天就来说说怎么用PostgreSQL 5分钟实现一个最简单ItemCF推荐系统，以推荐系统最喜闻乐见的[movielens数据集](https://grouplens.org/datasets/movielens/)为例。
 
