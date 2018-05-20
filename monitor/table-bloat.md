@@ -9,11 +9,77 @@ type: "post"
 
 
 
-# PostgreSQL表监控项
+# PostgreSQL表膨胀监控
 
 ## 背景
 
 索引用久了会出现膨胀，比如索引项的对应记录已经删除，但索引使用的页还没有回收，就浪费了空间，也很影响性能，定期重建索引是维护性能的有效方法。
+
+## 监控项目
+
+
+
+## 手工监控
+
+手工精确检查可以使用自带的`pgstattuple`插件，但只有SUPERUSER可以使用。
+
+```sql
+-- 创建插件
+CREATE EXTENSION pgstattuple;
+
+SELECT * FROM pgstattuple('user_school_validations');
+
+-[ RECORD 1 ]------+----------
+table_len          | 213360640
+tuple_count        | 3395382
+tuple_len          | 190141392
+tuple_percent      | 89.12
+dead_tuple_count   | 10747
+dead_tuple_len     | 601832
+dead_tuple_percent | 0.28
+free_space         | 4202816
+free_percent       | 1.97
+```
+
+此种方法精确，但相对缓慢。
+
+
+
+
+
+ table_len | tuple_count | tuple_len | tuple_percent | dead_tuple_count | dead_tuple_len | dead_tuple_percent | free_space | free_percent
+----------- | ------------- | ----------- | --------------- | ------------------ | ---------------- | -------------------- | ------------ | --------------
+ 213360640 |     3395307 | 190137192 |         89.12 |            10675 |         597800 |               0.28 |    4211516 |         1.97
+
+
+
+
+
+## 监控表大小
+
+```sql
+SELECT
+  *,
+  total_bytes - index_bytes - COALESCE(toast_bytes, 0) AS table_bytes
+FROM (
+       SELECT
+         c.oid,
+         nspname                               AS schema_name,
+         relname                               AS table_name,
+         c.reltuples :: BIGINT                 AS rows,
+         pg_total_relation_size(c.oid)         AS total_bytes,
+         pg_indexes_size(c.oid)                AS index_bytes,
+         pg_total_relation_size(reltoastrelid) AS toast_bytes
+       FROM pg_class c LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE relkind = 'r' AND nspname <> ALL (ARRAY ['monitor', 'pg_catalog', 'information_schema'])
+     ) a;
+
+
+```
+
+
+
+## 监控表IO
 
 
 
@@ -60,7 +126,7 @@ CREATE OR REPLACE VIEW monitor.pg_stat_bloat_tables AS
       GROUP BY columns.table_schema, columns.table_name, psut.relid, psut.n_live_tup
   ), null_headers AS (
       SELECT
-        ((constants.hdr + 1) + (sum(
+        ((constants.hdr  |  1)  |  (sum(
                                     CASE
                                     WHEN (pg_stats.null_frac <> (0) :: DOUBLE PRECISION)
                                       THEN 1
@@ -91,13 +157,13 @@ CREATE OR REPLACE VIEW monitor.pg_stat_bloat_tables AS
         null_headers.hdr,
         null_headers.schemaname,
         null_headers.tablename,
-        ((null_headers.datawidth + (((null_headers.hdr + null_headers.ma) -
+        ((null_headers.datawidth  |  (((null_headers.hdr  |  null_headers.ma) -
                                      CASE
                                      WHEN ((null_headers.hdr % null_headers.ma) = 0)
                                        THEN null_headers.ma
                                      ELSE (null_headers.hdr % null_headers.ma)
                                      END)) :: DOUBLE PRECISION)) :: NUMERIC AS datahdr,
-        (null_headers.maxfracsum * (((null_headers.nullhdr + null_headers.ma) -
+        (null_headers.maxfracsum * (((null_headers.nullhdr  |  null_headers.ma) -
                                      CASE
                                      WHEN ((null_headers.nullhdr % (null_headers.ma) :: BIGINT) = 0)
                                        THEN (null_headers.ma) :: BIGINT
@@ -112,7 +178,7 @@ CREATE OR REPLACE VIEW monitor.pg_stat_bloat_tables AS
         (pg_class.reltuples) :: NUMERIC                    AS est_rows,
         ((pg_class.relpages) :: NUMERIC * data_headers.bs) AS table_bytes,
         (ceil(((pg_class.reltuples * (
-          ((((data_headers.datahdr) :: DOUBLE PRECISION + data_headers.nullhdr2) + (4) :: DOUBLE PRECISION) +
+          ((((data_headers.datahdr) :: DOUBLE PRECISION  |  data_headers.nullhdr2)  |  (4) :: DOUBLE PRECISION)  | 
            (data_headers.ma) :: DOUBLE PRECISION) - (
             CASE
             WHEN ((data_headers.datahdr % (data_headers.ma) :: NUMERIC) = (0) :: NUMERIC)
@@ -132,8 +198,8 @@ CREATE OR REPLACE VIEW monitor.pg_stat_bloat_tables AS
         table_estimates.tablename,
         TRUE                                                                                            AS can_estimate,
         table_estimates.est_rows,
-        (table_estimates.table_bytes + ((COALESCE(toast.relpages, 0)) :: NUMERIC * table_estimates.bs)) AS table_bytes,
-        (table_estimates.expected_bytes + (ceil((COALESCE(toast.reltuples, (0) :: REAL) / (4) :: DOUBLE PRECISION)) *
+        (table_estimates.table_bytes  |  ((COALESCE(toast.relpages, 0)) :: NUMERIC * table_estimates.bs)) AS table_bytes,
+        (table_estimates.expected_bytes  |  (ceil((COALESCE(toast.reltuples, (0) :: REAL) / (4) :: DOUBLE PRECISION)) *
                                            (table_estimates.bs) :: DOUBLE PRECISION))                   AS expected_bytes
       FROM (table_estimates
         LEFT JOIN pg_class toast ON (((table_estimates.reltoastrelid = toast.oid) AND (toast.relkind = 't'))))
@@ -204,6 +270,29 @@ CREATE OR REPLACE VIEW monitor.pg_stat_bloat_tables AS
   ORDER BY bloat_data.pct_bloat DESC;
 
 COMMENT ON VIEW monitor.pg_stat_bloat_tables IS 'monitor table bloat rate';
+```
+
+找出需要清理的表
+
+```sql
+CREATE OR REPLACE FUNCTION monitor.select_bloat_indexes() RETURNS TEXT AS
+$$
+WITH indexes_bloat AS (
+    SELECT
+      schema_name || '.' || index_name as idx_name,
+      index_mb - bloat_mb as real_mb,
+      bloat_pct
+    FROM monitor.pg_bloat_indexes
+    WHERE schema_name NOT IN ('dba', 'monitor', 'trash') AND bloat_pct > 20
+    ORDER BY 2 DESC,3 DESC
+)
+(SELECT idx_name FROM indexes_bloat WHERE real_mb < 100 AND bloat_pct > 40 LIMIT 30) UNION -- 30 small
+(SELECT idx_name FROM indexes_bloat WHERE real_mb BETWEEN 100 AND 2000 LIMIT 10) UNION -- 10 medium
+(SELECT idx_name FROM indexes_bloat WHERE real_mb BETWEEN 2000 AND 10000 LIMIT 3); -- 3 big
+-- index bigger than 10g require manual check
+$$ LANGUAGE SQL VOLATILE;
+
+COMMENT ON FUNCTION monitor.select_bloat_indexes() IS 'list indexes that needs rebuild';
 ```
 
 

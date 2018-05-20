@@ -17,6 +17,7 @@
 - [一致性：一个过载的术语](misc/consistency-linearizability.md)
 - 架构演化：从单体到总线
 - CIA与ACID：Beyond Availability
+- [存储过程：Pros&Cons](misc/stored-procedure.md)
 
 ### 案例
 
@@ -121,11 +122,13 @@
 
 ### 维护
 
+- [日常维护项：备份、重整与清理](maintain/routine.md)
 - 维护表：VACUUM配置、问题、原理与实践。
 - 重建索引：细节与注意事项
 - 备份：机制、流程、问题、方法。
 - 逻辑备份：pg_dump
 - PITR生产实践
+- [使用pg_repack整理表与索引](admin/pg_repack.md)
 
 ### HA
 
@@ -166,10 +169,11 @@
 - [操作系统内核参数调优](tune/kernel.md)
 
 
-### 救火
+### 故障
 
-- [故障档案：移走负载导致的性能恶化](fault/download-failure.md)
-- [故障档案：事务ID回卷故障原理分析与处理](fault/xid-wrap-around.md)
+- [故障档案：移走负载导致的性能恶化故障](fault/download-failure.md)
+- [故障档案：事务ID回卷故障](fault/xid-wrap-around.md)
+- 故障档案：pg_repack导致的故障
 - PostgreSQL脏数据修复
 - 救火：杀查询的正确姿势
 - 存疑事务：提交日志损坏问题分析与修复

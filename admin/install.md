@@ -10,6 +10,62 @@ type: "post"
 
 # PostgreSQL Installation 
 
+CentOS6 PostgreSQL10
+
+```
+https://download.postgresql.org/pub/repos/yum/10/redhat/rhel-6-x86_64/pgdg-centos10-10-2.noarch.rpm
+```
+
+
+
+CentOS7 PostgreSQL10
+
+```
+https://download.postgresql.org/pub/repos/yum/10/redhat/rhel-7-x86_64/pgdg-centos10-10-2.noarch.rpm
+```
+
+
+
+
+
+```sql
+pg_install() {
+	if (( "$#" == 1 )); then
+		local dbversion="$1"; shift
+		local major_version="${dbversion:0:3}"
+		local short_version="$(echo $dbversion \
+		     | awk -F'.' '{print $1$2}')"
+		local rpm_base=''
+		local os_release=''
+
+		if ( grep -q 'CentOS release 6' /etc/redhat-release ); then
+		    rpm_base="http://yum.postgresql.org/$major_version/redhat/rhel-6Server-$(uname -m)"
+		    os_release="rhel6"
+		elif ( grep -q 'CentOS Linux release 7' /etc/redhat-release ); then
+		    rpm_base="http://yum.postgresql.org/$major_version/redhat/rhel-7Server-$(uname -m)"
+		    os_release="rhel7"
+		fi
+
+		yum clean all && yum install -q -y epel-release
+		yum install -q -y tcl perl-ExtUtils-Embed libxml2 libxslt uuid readline lz4 nc
+		yum install -q -y "$rpm_base"/pgdg-centos"$short_version"-"$major_version"-1.noarch.rpm
+		yum install -q -y "$rpm_base"/pgdg-centos"$short_version"-"$major_version"-2.noarch.rpm
+		yum install -q -y "$rpm_base"/pgdg-centos"$short_version"-"$major_version"-3.noarch.rpm
+
+		yum install -q -y postgresql"$short_version" postgresql"$short_version"-libs postgresql"$short_version"-server postgresql"$short_version"-contrib postgresql"$short_version"-devel postgresql"$short_version"-debuginfo
+
+		yum install -q -y pgbouncer pgpool-II-"$short_version" pg_top"$short_version" postgis2_"$short_version" postgis2_"$short_version"-client pg_repack"$short_version"
+
+		rm -f /usr/pgsql
+		ln -sf /usr/pgsql-"$major_version" /usr/pgsql
+		echo 'export PATH=/usr/pgsql/bin:$PATH' > /etc/profile.d/pgsql.sh
+	fi
+}
+
+```
+
+
+
 
 
 ## 生产环境使用的方式

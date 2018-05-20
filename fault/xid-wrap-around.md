@@ -80,14 +80,18 @@ SELECT *, age(datfrozenxid) FROM pg_database;
 
 #### 清理
 
-执行VACUUM FREEZE可以冻结老旧事务的ID
+执行`VACUUM FREEZE`可以冻结老旧事务的ID
 
 ```sql'
 set vacuum_cost_limit = 10000;
 set vacuum_cost_delay = 0;
 
-VACUUM FREEZE VERBOSEl;
+VACUUM FREEZE VERBOSE;
 ```
+
+可以针对特定的表进行VACUUM FREEZE，抓主要矛盾。
+
+
 
 
 
