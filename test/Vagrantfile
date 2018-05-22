@@ -1,0 +1,125 @@
+Vagrant.configure("2") do |config|
+    config.vm.define "primary", primary: true do |primary|
+        primary.vm.box = "centos/7"
+        primary.vm.hostname = 'primary.test.pg'
+        primary.vm.network "private_network", ip: "10.10.10.10"
+        primary.vm.box_check_update = false
+        primary.vm.provider "virtualbox" do |v|
+            v.linked_clone = true
+            v.customize [
+                "modifyvm", :id,
+                "--name", primary.vm.hostname,
+                "--memory", 1024,
+                "--cpus", "1",
+                "--ioapic", "on",
+                "--rtcuseutc", "on",
+                "--vtxvpid", "on",
+                "--nestedpaging", "on",
+                "--largepages", "on",
+                "--hwvirtex", "on",
+                "--pae", "on",
+                "--nictype1", "virtio",
+                "--nictype2", "virtio"
+            ]
+        end
+        primary.vm.provision "shell", inline: "cp -r /vagrant/bin              /opt/bin"
+        primary.vm.provision "shell", inline: "cp -r /vagrant/pkg              /opt/pkg"
+        primary.vm.provision "shell", inline: "cp -r /vagrant/node/${HOSTNAME} /opt/conf"
+
+        primary.vm.provision "shell", inline: "/opt/bin/install.sh"
+        primary.vm.provision "shell", inline: "sudo -iu postgres /opt/bin/init-primary.sh postgres://replicator:replicating@standby.test.pg:5432/test"
+    end
+
+    config.vm.define "standby" do |standby|
+        standby.vm.box = "centos/7"
+        standby.vm.hostname = 'standby.test.pg'
+        standby.vm.network "private_network", ip: "10.10.10.11"
+        standby.vm.box_check_update = false
+        standby.vm.provider "virtualbox" do |v|
+            v.linked_clone = true
+            v.customize [
+                "modifyvm", :id,
+                "--name", standby.vm.hostname,
+                "--memory", 1024,
+                "--cpus", "1",
+                "--ioapic", "on",
+                "--rtcuseutc", "on",
+                "--vtxvpid", "on",
+                "--nestedpaging", "on",
+                "--largepages", "on",
+                "--hwvirtex", "on",
+                "--pae", "on",
+                "--nictype1", "virtio",
+                "--nictype2", "virtio"
+            ]
+        end
+        standby.vm.provision "shell", inline: "cp -r /vagrant/bin /opt/bin"
+        standby.vm.provision "shell", inline: "cp -r /vagrant/pkg /opt/pkg"
+        standby.vm.provision "shell", inline: "cp -r /vagrant/node/${HOSTNAME} /opt/conf"
+		standby.vm.provision "shell", inline: "/opt/bin/install.sh"
+        standby.vm.provision "shell", inline: "sudo -iu postgres /opt/bin/init-standby.sh 'postgres://replicator:replicating@primary.test.pg:5432/test?application_name=standby'"
+    end
+
+    config.vm.define "offline" do |offline|
+        offline.vm.box = "centos/7"
+        offline.vm.hostname = 'offline.test.pg'
+        offline.vm.network "private_network", ip: "10.10.10.12"
+        offline.vm.box_check_update = false
+        offline.vm.provider "virtualbox" do |v|
+            v.linked_clone = true
+            v.customize [
+                "modifyvm", :id,
+                "--name", offline.vm.hostname,
+                "--memory", 1024,
+                "--cpus", "1",
+                "--ioapic", "on",
+                "--rtcuseutc", "on",
+                "--vtxvpid", "on",
+                "--nestedpaging", "on",
+                "--largepages", "on",
+                "--hwvirtex", "on",
+                "--pae", "on",
+                "--nictype1", "virtio",
+                "--nictype2", "virtio"
+            ]
+        end
+        offline.vm.provision "shell", inline: "cp -r /vagrant/bin /opt/bin"
+        offline.vm.provision "shell", inline: "cp -r /vagrant/pkg /opt/pkg"
+        offline.vm.provision "shell", inline: "cp -r /vagrant/node/${HOSTNAME} /opt/conf"
+        offline.vm.provision "shell", inline: "/opt/bin/install.sh"
+        offline.vm.provision "shell", inline: "sudo -iu postgres /opt/bin/init-offline.sh 'postgres://replicator:replicating@primary.test.pg:5432/test?apply_delay=10min'"
+    end
+
+    config.vm.define "monitor" do |monitor|
+        monitor.vm.box = "centos/7"
+        monitor.vm.hostname = 'monitor'
+        monitor.vm.network "private_network", ip: "10.10.10.20"
+        monitor.vm.box_check_update = false
+        monitor.vm.provider "virtualbox" do |v|
+            v.linked_clone = true
+            v.customize [
+                "modifyvm", :id,
+                "--name", monitor.vm.hostname,
+                "--memory", 2048,
+                "--cpus", "1",
+                "--ioapic", "on",
+                "--rtcuseutc", "on",
+                "--vtxvpid", "on",
+                "--nestedpaging", "on",
+                "--largepages", "on",
+                "--hwvirtex", "on",
+                "--pae", "on",
+                "--nictype1", "virtio",
+                "--nictype2", "virtio"
+            ]
+        end
+        monitor.vm.provision "shell", inline: "cp -r /vagrant/bin /opt/bin"
+        monitor.vm.provision "shell", inline: "cp -r /vagrant/pkg /opt/pkg"
+        monitor.vm.provision "shell", inline: "cp -r /vagrant/node/${HOSTNAME} /opt/conf"
+        monitor.vm.provision "shell", inline: "/opt/bin/install.sh"
+        monitor.vm.provision "shell", inline: "/opt/bin/install-prometheus.sh"
+        monitor.vm.provision "shell", inline: "/opt/bin/install-grafana.sh"
+
+        monitor.vm.provision "shell", inline: "sudo -iu postgres /opt/bin/init-primary.sh postgres:///meta"
+    end
+end

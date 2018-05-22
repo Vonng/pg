@@ -1,0 +1,784 @@
+###############################################################
+# PostgreSQL Extended Metrics
+#
+# Author:   Vonng (fengruohang@outlook.com)
+# Desc  :   postgres_exporter extended metrics files
+#           This metrics files contains default metrics
+#           Disable default metrics when using this.
+# Ver   :   PostgreSQL 11
+# Mtime :   2019-03-01
+###############################################################
+
+# Generic metrics:
+pg:
+  query: "SELECT pg_is_in_recovery() :: INTEGER        AS in_recovery,
+                 pg_is_in_backup() :: INTEGER          AS in_backup,
+                 (CASE WHEN pg_is_in_recovery() THEN pg_last_wal_replay_lsn()  ELSE pg_current_wal_lsn() END) - '0/0' AS lsn,
+                 (CASE WHEN pg_is_in_recovery() THEN pg_last_wal_receive_lsn() ELSE NULL END)        - '0/0' AS receive_lsn,
+                 (CASE WHEN pg_is_in_recovery() THEN pg_last_wal_replay_lsn()  ELSE NULL END)        - '0/0' AS replay_lsn,
+                 (CASE WHEN NOT pg_is_in_recovery() THEN pg_current_wal_insert_lsn() ELSE NULL END)  - '0/0' AS write_lsn,
+                 (CASE WHEN NOT pg_is_in_recovery() THEN pg_current_wal_flush_lsn()  ELSE NULL END)  - '0/0' AS flush_lsn,
+                 (CASE WHEN (NOT pg_is_in_recovery() OR pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn()) THEN 0 ELSE EXTRACT (EPOCH FROM now() - pg_last_xact_replay_timestamp()) END) AS lag,
+                 extract(EPOCH FROM now() - pg_postmaster_start_time()) :: FLOAT AS uptime,
+                 extract(EPOCH FROM now() - pg_conf_load_time()) :: FLOAT AS conf_reload_time,
+                 extract(EPOCH FROM now() - pg_backup_start_time())::FLOAT AS backup_time,
+                 extract(EPOCH FROM pg_last_xact_replay_timestamp())::FLOAT AS last_replay_time;"
+
+  metrics:
+  - is_in_recovery:
+      usage: "GAUGE"
+      description: "1 if recovery is still in progress. 0 for master, 1 for slave"
+  - is_in_recovery:
+        usage: "GAUGE"
+        description: "1 if backup is still in progress."
+  - lsn:
+      usage: "GAUGE"
+      description: "Log sequence number, bigint"
+  - receive_lsn:
+        usage: "GAUGE"
+        description: "LSN that slave have received"
+  - replay_lsn:
+        usage: "GAUGE"
+        description: "LSN that slave have applied"
+  - write_lsn:
+        usage: "GAUGE"
+        description: "LSN that master are going to write"
+  - flush_lsn:
+        usage: "GAUGE"
+        description: "LSN that master flushed to disk"
+  - lag:
+      usage: "GAUGE"
+      description: "Replication lag behind master in seconds (view of slave)"
+  - uptime:
+      usage: "GAUGE"
+      description: "Seconds since postmaster start"
+  - conf_reload_time:
+      usage: "GAUGE"
+      description: "Seconds since last configuration load time"
+  - backup_time:
+      usage: "GAUGE"
+      description: "Seconds since backup start"
+  - last_replay_time:
+        usage: "GAUGE"
+        description: "last xact replayed timestamp"
+
+
+# DEFAULT METRICS
+pg_xact:
+    query: "WITH snap (s) AS (SELECT txid_current_snapshot()),
+              xip_list AS  (SELECT txid_snapshot_xip(s) FROM snap),
+              xip_count(v) AS (SELECT count(*) from xip_list)
+            SELECT
+              txid_snapshot_xmin(txid_current_snapshot()) as xmin,
+              txid_snapshot_xmax(txid_current_snapshot()) as xmax,
+              v AS count,
+              a.xid as last_xid, extract(EPOCH FROM(a.timestamp)) as last_time
+            FROM xip_count
+            CROSS JOIN (SELECT * FROM pg_last_committed_xact()) a;"
+    metrics:
+    - xmin:
+          usage: "GAUGE"
+          description: "Earliest transaction ID (txid) that is still active. All earlier transactions will either be committed and visible, or rolled back and dead."
+    - xmax:
+          usage: "GAUGE"
+          description: "First as-yet-unassigned txid. All txids greater than or equal to this are not yet started as of the time of the snapshot, and thus invisible."
+    - count:
+          usage: "GAUGE"
+          description: "Current active xact count"
+    - last_xid:
+          usage: "GAUGE"
+          description: "last committed xact ID, require track_commit_timestamp"
+    - count:
+          usage: "GAUGE"
+          description: "last committed xact timestamp, reuqire track_commit_timestamp"
+
+
+# checkpoint control info
+pg_control_checkpoint:
+    query: "SELECT checkpoint_lsn - '0/0'                 AS checkpoint_lsn,
+                   redo_lsn - '0/0'                       AS redo_lsn,
+                   timeline_id                            AS timeline,
+                   split_part(next_xid, ':', 1) :: BIGINT AS epoch,
+                   split_part(next_xid, ':', 2) :: BIGINT AS next_xid,
+                   next_oid,
+                   oldest_xid,
+                   oldest_active_xid,
+                   oldest_commit_ts_xid,
+                   newest_commit_ts_xid,
+                   extract(EPOCH FROM checkpoint_time)    AS checkpoint_time
+            FROM pg_control_checkpoint();"
+    metrics:
+    - checkpoint_lsn:
+          usage: "COUNTER"
+          description: "checkpoint lsn"
+    - redo_lsn:
+          usage: "GAUGE"
+          description: "redo start point"
+    - timeline:
+          usage: "GAUGE"
+          description: "Current WAL timeline"
+    - epoch:
+          usage: "GAUGE"
+          description: "current xact epoch"
+    - next_xid:
+          usage: "GAUGE"
+          description: "next xid since this checkpoint"
+    - next_oid:
+          usage: "GAUGE"
+          description: "next oid since this checkpoint"
+    - redo_lsn:
+          usage: "COUNTER"
+          description: "redo start point"
+    - oldest_xid:
+          usage: "GAUGE"
+          description: "oldest existing xid by the checkpoint"
+    - oldest_active_xid:
+          usage: "GAUGE"
+          description: "oldest active id by the checkpoint"
+    - oldest_commit_ts_xid:
+          usage: "GAUGE"
+          description: "oldest xid with commit ts by the checkpoint"
+    - newest_commit_ts_xid:
+          usage: "GAUGE"
+          description: "newest xid with commit ts by the checkpoint"
+    - checkpoint_time:
+          usage: "GAUGE"
+          description: "timestamp of this checkpoint"
+
+
+# Recovery control info
+pg_control_recovery:
+    query: "SELECT min_recovery_end_timeline    as min_timeline,
+                   min_recovery_end_lsn - '0/0' as min_lsn,
+                   backup_start_lsn - '0/0'     as backup_start_lsn,
+                   backup_end_lsn - '0/0'       as backup_end_lsn
+            FROM pg_control_recovery();"
+    metrics:
+    - min_timeline:
+          usage: "GAUGE"
+          description: "recovery min timeline"
+    - min_lsn:
+          usage: "COUNTER"
+          description: "recovery min lsn"
+    - backup_start_lsn:
+          usage: "COUNTER"
+          description: "backup start lsn"
+    - backup_end_lsn:
+          usage: "COUNTER"
+          description: "backup end lsn"
+
+
+# Database statistics: xact, blocks, tuples, conflicts
+# DEFAULT METRICS
+pg_database:
+  query: "SELECT datname,
+                 pg_database_size(datid)         AS size,
+                 age(datfrozenxid)               AS age,
+                 datfrozenxid :: TEXT :: FLOAT   AS datfrozenxid,
+                 confl_tablespace,
+                 confl_lock,
+                 confl_snapshot,
+                 confl_bufferpin,
+                 confl_deadlock,
+                 numbackends,
+                 xact_commit,
+                 xact_rollback,
+                 xact_commit + xact_rollback     AS xact_total,
+                 blks_read,
+                 blks_hit,
+                 blks_read + blks_hit            AS blks_total,
+                 tup_returned,
+                 tup_fetched,
+                 tup_inserted,
+                 tup_updated,
+                 tup_deleted,
+                 tup_inserted + tup_updated + tup_deleted AS tup_modified,
+                 conflicts,
+                 temp_files,
+                 temp_bytes,
+                 deadlocks,
+                 blk_read_time,
+                 blk_write_time,
+                 stats_reset
+          FROM pg_stat_database d,
+               LATERAL (SELECT datfrozenxid, datistemplate FROM pg_database pd WHERE pd.oid = d.datid) p,
+               LATERAL (SELECT confl_tablespace, confl_lock, confl_snapshot, confl_bufferpin, confl_deadlock
+                        FROM pg_stat_database_conflicts pdc
+                        WHERE pdc.datid = d.datid) p2
+          WHERE NOT datistemplate;"
+  metrics:
+  - datname:
+      usage: "LABEL"
+      description: "Name of the database"
+  - size:
+      usage: "GAUGE"
+      description: "Disk space used by the database"
+  - age:
+      usage: "GAUGE"
+      description: "Age of that database: age(datfrozenxid)"
+  - datfrozenxid:
+      usage: "GAUGE"
+      description: "All xid before this is frozen"
+  - confl_tablespace:
+      usage: "COUNTER"
+      description: "Number of queries in this database that have been canceled due to dropped tablespaces"
+  - confl_lock:
+      usage: "COUNTER"
+      description: "Number of queries in this database that have been canceled due to lock timeouts"
+  - confl_snapshot:
+      usage: "COUNTER"
+      description: "Number of queries in this database that have been canceled due to old snapshots"
+  - confl_bufferpin:
+      usage: "COUNTER"
+      description: "Number of queries in this database that have been canceled due to pinned buffers"
+  - confl_deadlock:
+      usage: "COUNTER"
+      description: "Number of queries in this database that have been canceled due to deadlocks"
+  - numbackends:
+      usage: "GAUGE"
+      description: "Number of backends currently connected to this database"
+  - xact_commit:
+      usage: "COUNTER"
+      description: "Number of transactions in this database that have been committed"
+  - xact_rollback:
+      usage: "COUNTER"
+      description: "Number of transactions in this database that have been rolled back"
+  - xact_total:
+      usage: "COUNTER"
+      description: "Number of transactions in this database that occurs (xact_commit + xact_rollback)"
+  - blks_read:
+      usage: "COUNTER"
+      description: "Number of disk blocks read from disk in this database"
+  - blks_hit:
+      usage: "COUNTER"
+      description: "Number of times disk blocks were found already in PostgreSQL buffer cache"
+  - blks_total:
+      usage: "COUNTER"
+      description: "Number of blocks been accessed (blks_read + blks_hit)"
+  - tup_returned:
+      usage: "COUNTER"
+      description: "Number of rows returned by queries in this database"
+  - tup_fetched:
+      usage: "COUNTER"
+      description: "Number of rows fetched by queries in this database"
+  - tup_inserted:
+      usage: "COUNTER"
+      description: "Number of rows inserted by queries in this database"
+  - tup_updated:
+      usage: "COUNTER"
+      description: "Number of rows updated by queries in this database"
+  - tup_deleted:
+      usage: "COUNTER"
+      description: "Number of rows deleted by queries in this database"
+  - tup_modified:
+      usage: "COUNTER"
+      description: "Number of rows modified(insert,update,delete) by queries in this database"
+  - conflicts:
+      usage: "COUNTER"
+      description: "Number of queries canceled due to conflicts with recovery in this database. (slave only)"
+  - temp_files:
+      usage: "COUNTER"
+      description: "Number of temporary files created by queries in this database"
+  - temp_bytes:
+      usage: "COUNTER"
+      description: "Temporary file byte count"
+  - deadlocks:
+      usage: "COUNTER"
+      description: "Number of deadlocks detected in this database"
+  - blk_read_time:
+      usage: "COUNTER"
+      description: "Time spent reading data file blocks by backends in this database, in milliseconds"
+  - blk_write_time:
+      usage: "COUNTER"
+      description: "Time spent writing data file blocks by backends in this database, in milliseconds"
+  - stats_reset:
+      usage: "COUNTER"
+      description: "Time at which these statistics were last reset"
+
+# Database background writer
+# DEFAULT METRICS
+pg_bgwriter:
+  query: "  SELECT checkpoints_timed, checkpoints_req, checkpoint_write_time, checkpoint_sync_time,
+                buffers_checkpoint, buffers_clean, buffers_backend,
+                maxwritten_clean, buffers_backend_fsync, buffers_alloc, stats_reset
+            FROM pg_stat_bgwriter;"
+  metrics:
+  - checkpoints_timed:
+      usage: "COUNTER"
+      description: "Number of scheduled checkpoints that have been performed"
+  - checkpoints_req:
+      usage: "COUNTER"
+      description: "Number of requested checkpoints that have been performed"
+  - checkpoint_write_time:
+      usage: "COUNTER"
+      description: "Total amount of time that has been spent in the portion of checkpoint processing where files are written to disk, in milliseconds"
+  - checkpoint_sync_time:
+      usage: "COUNTER"
+      description: "Total amount of time that has been spent in the portion of checkpoint processing where files are synchronized to disk, in milliseconds"
+  - buffers_checkpoint:
+      usage: "COUNTER"
+      description: "Number of buffers written during checkpoints"
+  - buffers_clean:
+      usage: "COUNTER"
+      description: "Number of buffers written by the background writer"
+  - buffers_backend:
+      usage: "COUNTER"
+      description: "Number of buffers written directly by a backend"
+  - maxwritten_clean:
+      usage: "COUNTER"
+      description: "Number of times the background writer stopped a cleaning scan because it had written too many buffers"
+  - buffers_backend_fsync:
+      usage: "COUNTER"
+      description: "Number of times a backend had to execute its own fsync call (normally the background writer handles those even when the backend does its own write)"
+  - buffers_alloc:
+      usage: "COUNTER"
+      description: "Number of buffers allocated"
+  - stats_reset:
+      usage: "COUNTER"
+      description: "Time at which these statistics were last reset"
+
+
+# Database conflict stats
+# DEFAULT METRICS
+pg_activity_state:
+  query: "SELECT pg_database.datname, tmp.state, COALESCE(count, 0) AS count, COALESCE(max_tx_duration, 0) AS tx_duration, COALESCE(state_duration, 0) AS duration
+          FROM (VALUES ('active'), ('idle'), ('idle in transaction'), ('idle in transaction (aborted)'), ('fastpath function call'), ('disabled'),('null')) AS tmp (state)
+                 CROSS JOIN pg_database
+                 LEFT JOIN (SELECT datname, coalesce(state, 'null') AS state,
+                                   count(*) AS count,
+                                   MAX(extract(EPOCH FROM now() - xact_start)) :: float AS max_tx_duration,
+                                   MAX(extract(EPOCH FROM now() - state_change)) :: float AS state_duration
+                            FROM pg_stat_activity WHERE datname IS NOT NULL
+                            GROUP BY datname, state) AS tmp2 ON tmp.state = tmp2.state AND pg_database.datname = tmp2.datname AND NOT datistemplate;"
+  metrics:
+  - datname:
+      usage: "LABEL"
+      description: "database name"
+  - state:
+      usage: "LABEL"
+      description: "activity state"
+  - count:
+      usage: "GAUGE"
+      description: "group count"
+  - tx_duration:
+      usage: "GAUGE"
+      description: "max length of activity group (database, state)"
+  - duration:
+      usage: "GAUGE"
+      description: "max state change duration of activity group (database, state)"
+
+
+# Database conflict stats
+# DEFAULT METRICS
+pg_activity_event:
+  query: "SELECT pg_database.datname, tmp.wait_event_type as event, COALESCE(count, 0) AS count, COALESCE(max_tx_duration, 0) AS tx_duration, COALESCE(state_duration, 0) AS duration
+          FROM (VALUES ('LWLock'), ('Lock'), ('BufferPin'), ('Activity'), ('Client'), ('Extension'),('IPC'),('Timeout'), ('IO')) AS tmp (wait_event_type)
+                 CROSS JOIN pg_database
+                 LEFT JOIN (SELECT datname, wait_event_type,
+                                   count(*) AS count,
+                                   MAX(extract(EPOCH FROM now() - xact_start)) :: float AS max_tx_duration,
+                                   MAX(extract(EPOCH FROM now() - state_change)) :: float AS state_duration
+                            FROM pg_stat_activity WHERE datname IS NOT NULL
+                            GROUP BY datname, wait_event_type) AS tmp2 ON tmp.wait_event_type = tmp2.wait_event_type AND pg_database.datname = tmp2.datname AND NOT datistemplate;"
+  metrics:
+  - datname:
+      usage: "LABEL"
+      description: "database name"
+  - event:
+      usage: "LABEL"
+      description: "wait event type"
+  - count:
+      usage: "GAUGE"
+      description: "group count"
+  - tx_duration:
+      usage: "GAUGE"
+      description: "max length of activity group (database, state)"
+  - duration:
+      usage: "GAUGE"
+      description: "max state change duration of activity group (database, state)"
+
+
+# Locks group by mode
+# DEFAULT METRICS
+pg_locks:
+  query: "  SELECT pg_database.datname,tmp.mode,COALESCE(count,0) AS count
+            FROM
+                (
+                  VALUES ('accesssharelock'),
+                        ('rowsharelock'),
+                        ('rowexclusivelock'),
+                        ('shareupdateexclusivelock'),
+                        ('sharelock'),
+                        ('sharerowexclusivelock'),
+                        ('exclusivelock'),
+                        ('accessexclusivelock')
+                ) AS tmp(mode) CROSS JOIN pg_database
+            LEFT JOIN
+                (SELECT database, lower(mode) AS mode,count(*) AS count
+                FROM pg_locks WHERE database IS NOT NULL
+                GROUP BY database, lower(mode)
+            ) AS tmp2
+            ON tmp.mode=tmp2.mode and pg_database.oid = tmp2.database ORDER BY 1;"
+  metrics:
+  - datname:
+      usage: "LABEL"
+      description: "Name of the database"
+  - mode:
+      usage: "LABEL"
+      description: "Type of lock"
+  - count:
+      usage: "COUNTER"
+      description: "Number of locks of corresponding mode"
+
+
+
+# Database replication statistics
+# Add more labels & more metrics, compatible with default metrics
+pg_replication:
+  query: "SELECT
+            client_addr,
+            application_name,
+            sent_lsn - '0/0'                AS sent_lsn,
+            write_lsn - '0/0'               AS write_lsn,
+            flush_lsn - '0/0'               AS flush_lsn,
+            replay_lsn - '0/0'              AS replay_lsn,
+            extract(EPOCH FROM write_lag)   AS write_lag,
+            extract(EPOCH FROM flush_lag)   AS flush_lag,
+            extract(EPOCH FROM replay_lag)  AS replay_lag,
+            CASE WHEN pg_is_in_recovery() THEN NULL ELSE pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) :: FLOAT END AS replay_diff,
+            CASE WHEN pg_is_in_recovery() THEN NULL ELSE pg_wal_lsn_diff(pg_current_wal_lsn(), flush_lsn) :: FLOAT END AS  flush_diff,
+            CASE WHEN pg_is_in_recovery() THEN NULL ELSE pg_wal_lsn_diff(pg_current_wal_lsn(), write_lsn) :: FLOAT END AS  write_diff,
+            sync_priority
+          FROM pg_stat_replication;"
+  metrics:
+  - client_addr:
+      usage: "LABEL"
+      description: "client address of wal receiver"
+  - application_name:
+      usage: "LABEL"
+      description: "application name of slave"
+  - sent_lsn:
+      usage: "COUNTER"
+      description: "Last transaction log position sent on this connection"
+  - write_lsn:
+      usage: "COUNTER"
+      description: "Last transaction log position written to disk by this standby server"
+  - flush_lsn:
+      usage: "COUNTER"
+      description: "Last transaction log position flushed to disk by this standby server"
+  - replay_lsn:
+      usage: "GAUGE"
+      description: "Last transaction log position replayed into the database on this standby server"
+  - write_lag:
+      usage: "GAUGE"
+      description: "Latest ACK lsn diff with write (sync-remote-write lag)"
+  - flush_lag:
+      usage: "GAUGE"
+      description: "Latest ACK lsn diff with flush (sync-remote-flush lag)"
+  - replay_lag:
+      usage: "GAUGE"
+      description: "Latest ACK lsn diff with replay (sync-remote-apply lag)"
+  - replay_diff:
+      usage: "GAUGE"
+      description: "Lag in bytes between master and slave apply"
+  - flush_diff:
+      usage: "GAUGE"
+      description: "Lag in bytes between master and slave flush"
+  - write_diff:
+      usage: "GAUGE"
+      description: "Lag in bytes between master and slave write"
+  - sync_priority:
+      usage: "GAUGE"
+      description: "Priority of this standby server for being chosen AS the synchronous standby"
+
+
+# WAL receiver (slave) statistic
+pg_wal_receiver:
+    query: "SELECT
+                   sender_host || (CASE WHEN slot_name IS NOT NULL THEN ':' || slot_name ELSE '' END) as sender,
+                   receive_start_lsn - '0/0'                 AS receive_start_lsn,
+                   receive_start_tli,
+                   received_lsn - '0/0'                      AS received_lsn,
+                   received_tli,
+                   extract(EPOCH FROM last_msg_send_time)    AS last_msg_send_time,
+                   extract(EPOCH FROM last_msg_receipt_time) AS last_msg_receipt_time,
+                   latest_end_lsn - '0/0'                    AS latest_end_lsn,
+                   extract(EPOCH FROM latest_end_time)       AS latest_end_time
+            FROM pg_stat_wal_receiver;"
+    metrics:
+    - sender:
+          usage: "LABEL"
+          description: "sender host : slot_name"
+    - receive_start_lsn:
+          usage: "COUNTER"
+          description: "pg_current_wal_lsn() on master  & pg_last_wal_replay_lsn() on slave"
+    - receive_start_tli:
+          usage: "GAUGE"
+          description: "Last transaction log position sent on this connection"
+    - received_lsn:
+          usage: "COUNTER"
+          description: "Last transaction log position written to disk by this standby server"
+    - received_tli:
+          usage: "GAUGE"
+          description: "Last transaction log position flushed to disk by this standby server"
+    - last_msg_send_time:
+          usage: "GAUGE"
+          description: "Last transaction log position replayed into the database on this standby server"
+    - last_msg_receipt_time:
+          usage: "GAUGE"
+          description: "Latest ACK lsn diff with write (sync-remote-write lag)"
+    - latest_end_lsn:
+          usage: "COUNTER"
+          description: "Latest ACK lsn diff with flush (sync-remote-flush lag)"
+    - latest_end_time:
+          usage: "GAUGE"
+          description: "Latest ACK lsn diff with replay (sync-remote-apply lag)"
+
+
+
+# Replication Slot
+pg_replication_slots:
+  query: "SELECT slot_name,
+                 database                                                   AS datname,
+                 restart_lsn - '0/0'                                        AS restart_lsn,
+                 confirmed_flush_lsn - '0/0'                                AS flush_lsn,
+                 ((CASE WHEN pg_is_in_recovery() THEN pg_last_wal_replay_lsn() ELSE pg_current_wal_lsn() END) - restart_lsn) :: FLOAT AS retained_bytes
+          FROM pg_replication_slots
+          WHERE active;"
+  metrics:
+  - slot_name:
+      usage: "LABEL"
+      description: "Name of the replication slot"
+  - restart_lsn:
+      usage: "GAUGE"
+      description: "The address (LSN) of oldest WAL which still might be required by the consumer of this slot and thus won't be automatically removed during checkpoints."
+  - flush_lsn:
+      usage: "GAUGE"
+      description: "slot's consumer has confirmed receiving data. Data older than this is not available anymore. NULL for physical slots."
+  - retained_bytes:
+      usage: "GAUGE"
+      description: "Number of bytes retained"
+
+# TABLE Level statistics: Very important table level stats
+pg_tables:
+  query: "SELECT schemaname,
+                 relname,
+                 schemaname ||'.'|| relname          AS fullname,
+                 reltuples, relpages,
+                 pg_total_relation_size(relid)       AS relsize,
+                 relage, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_tup_ins, n_tup_upd, n_tup_del, (n_tup_ins + n_tup_upd + n_tup_del) AS n_tup_mod,
+                 n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze, last_vacuum, last_autovacuum, last_analyze, last_autoanalyze, vacuum_count, autovacuum_count, analyze_count, autoanalyze_count, heap_blks_read,
+                 heap_blks_hit, idx_blks_read, idx_blks_hit, toast_blks_read, toast_blks_hit, tidx_blks_read, tidx_blks_hit
+          FROM pg_stat_user_tables psut,
+               LATERAL (SELECT reltuples, relpages, age(relfrozenxid) AS relage FROM pg_class pc WHERE pc.oid = psut.relid) p,
+               LATERAL (SELECT heap_blks_read, heap_blks_hit, idx_blks_read, idx_blks_hit, toast_blks_read, toast_blks_hit, tidx_blks_read, tidx_blks_hit
+                        FROM pg_statio_user_tables psio WHERE psio.relid = psut.relid) p2;"
+  metrics:
+  - schemaname:
+      usage: "LABEL"
+      description: "Name of this table schemaname.relname"
+  - relname:
+      usage: "LABEL"
+      description: "Name of this table"
+  - fullname:
+      usage: "LABEL"
+      description: "schemaname.relname"
+  - reltuples:
+      usage: "COUNTER"
+      description: "Number of estimate rel tuples"
+  - relpages:
+      usage: "COUNTER"
+      description: "Number of relation main branch pages"
+  - relsize:
+      usage: "COUNTER"
+      description: "pg_total_relation_size(relid) in bytes"
+  - relage:
+      usage: "COUNTER"
+      description: "age(pg_class.relfrozenxid)"
+  - seq_scan:
+      usage: "COUNTER"
+      description: "Number of sequential scans initiated on this table"
+  - seq_tup_read:
+      usage: "COUNTER"
+      description: "Number of live rows fetched by sequential scans"
+  - idx_scan:
+      usage: "COUNTER"
+      description: "Number of index scans initiated on this table"
+  - idx_tup_fetch:
+      usage: "COUNTER"
+      description: "Number of live rows fetched by index scans"
+  - n_tup_ins:
+      usage: "COUNTER"
+      description: "Number of rows inserted"
+  - n_tup_upd:
+      usage: "COUNTER"
+      description: "Number of rows updated"
+  - n_tup_del:
+      usage: "COUNTER"
+      description: "Number of rows deleted"
+  - n_tup_hot_upd:
+      usage: "COUNTER"
+      description: "Number of rows HOT updated (i.e., with no separate index update required)"
+  - n_live_tup:
+      usage: "GAUGE"
+      description: "Estimated number of live rows"
+  - n_dead_tup:
+      usage: "GAUGE"
+      description: "Estimated number of dead rows"
+  - n_mod_since_analyze:
+      usage: "GAUGE"
+      description: "Estimated number of rows changed since last analyze"
+  - last_vacuum:
+      usage: "GAUGE"
+      description: "Last time at which this table was manually vacuumed (not counting VACUUM FULL)"
+  - last_autovacuum:
+      usage: "GAUGE"
+      description: "Last time at which this table was vacuumed by the autovacuum daemon"
+  - last_analyze:
+      usage: "GAUGE"
+      description: "Last time at which this table was manually analyzed"
+  - last_autoanalyze:
+      usage: "GAUGE"
+      description: "Last time at which this table was analyzed by the autovacuum daemon"
+  - vacuum_count:
+      usage: "COUNTER"
+      description: "Number of times this table has been manually vacuumed (not counting VACUUM FULL)"
+  - autovacuum_count:
+      usage: "COUNTER"
+      description: "Number of times this table has been vacuumed by the autovacuum daemon"
+  - analyze_count:
+      usage: "COUNTER"
+      description: "Number of times this table has been manually analyzed"
+  - autoanalyze_count:
+      usage: "COUNTER"
+      description: "Number of times this table has been analyzed by the autovacuum daemon"
+  - heap_blks_read:
+      usage: "COUNTER"
+      description: "relation heap read"
+  - heap_blks_hit:
+      usage: "COUNTER"
+      description: "relation heap hit"
+  - idx_blks_read:
+      usage: "COUNTER"
+      description: "index read"
+  - idx_blks_hit:
+      usage: "COUNTER"
+      description: "index hit"
+  - toast_blks_read:
+      usage: "COUNTER"
+      description: "toast heap read"
+  - toast_blks_hit:
+      usage: "COUNTER"
+      description: "toast heap hit"
+  - tidx_blks_read:
+      usage: "COUNTER"
+      description: "toast index read"
+  - tidx_blks_hit:
+      usage: "COUNTER"
+      description: "toast index hit"
+
+# Indexes statistics
+pg_indexes:
+  query: "SELECT schemaname,
+                 indexrelname,
+                 schemaname||'.'|| indexrelname AS fullname,
+                 reltuples,
+                 relpages,
+                 pg_total_relation_size(relid)  AS relsize,
+                 idx_scan,
+                 idx_tup_read,
+                 idx_tup_fetch,
+                 idx_blks_read,
+                 idx_blks_hit
+          FROM pg_stat_user_indexes psui,
+               LATERAL (SELECT reltuples, relpages FROM pg_class pc WHERE pc.oid = psui.indexrelid) p,
+               LATERAL (SELECT idx_blks_read,idx_blks_hit FROM pg_statio_user_indexes psio WHERE psio.indexrelid = psui.indexrelid) p2;"
+  metrics:
+  - schemaname:
+      usage: "LABEL"
+      description: "Name of this index schemaname.indexrelname"
+  - indexrelname:
+      usage: "LABEL"
+      description: "Name of this index"
+  - fullname:
+      usage: "LABEL"
+      description: "Name of this index schemaname.indexrelname"
+  - reltuples:
+      usage: "COUNTER"
+      description: "Number of estimate rel tuples"
+  - relpages:
+      usage: "COUNTER"
+      description: "Number of relation main branch pages"
+  - relsize:
+      usage: "COUNTER"
+      description: "pg_total_relation_size(relid) in bytes"
+  - idx_scan:
+      usage: "COUNTER"
+      description: "Number of index scans initiated on this index"
+  - idx_tup_read:
+      usage: "COUNTER"
+      description: "Number of index entries returned by scans on this index"
+  - idx_tup_fetch:
+      usage: "COUNTER"
+      description: "Number of live table rows fetched by simple index scans using this index"
+  - idx_blks_read:
+      usage: "COUNTER"
+      description: "Number of blocks been read from disk of this index"
+  - idx_blks_hit:
+      usage: "COUNTER"
+      description: "Number of blocks hit from cache of this index"
+
+
+# Function statistics
+# set track_functions = on
+pg_functions:
+  query: "SELECT schemaname, funcname, schemaname||'.'|| funcname || '.' || funcid AS fullname,
+                 calls, total_time, self_time FROM pg_stat_user_functions;"
+  metrics:
+  - schemaname:
+      usage: "LABEL"
+      description: "Name of belonged schema"
+  - funcname:
+      usage: "LABEL"
+      description: "Name of the function"
+  - fullname:
+      usage: "LABEL"
+      description: "Name of this function schemaname.funcname.funcid"
+  - calls:
+      usage: "GAUGE"
+      description: "Number of times this function has been called"
+  - total_time:
+      usage: "GAUGE"
+      description: "Total time spent in this function and all other functions called by it, in milliseconds"
+  - self_time:
+      usage: "GAUGE"
+      description: "Total time spent in this function itself, not including other functions called by it, in milliseconds"
+
+# Vacuum process monitoring, Since 9.6
+pg_progress_vacuum:
+  query: "SELECT relid :: RegClass AS relname,
+                 (CASE WHEN heap_blks_total > 0 THEN heap_blks_vacuumed :: FLOAT / heap_blks_total ELSE NULL END) AS ratio
+          FROM pg_stat_progress_vacuum;"
+  metrics:
+  - relname:
+      usage: "LABEL"
+      description: "Name of vacuumed table"
+  - ratio:
+      usage: "GAUGE"
+      description: "progress ratio (0-1) of vacuum heap stage"
+
+
+
+# WAL generate speed, Since 10.0
+pg_wal:
+  query: "SELECT last_5_min_size_bytes, (SELECT COALESCE(sum(size), 0) FROM pg_catalog.pg_ls_waldir()) AS total_size_bytes
+          FROM (SELECT COALESCE(sum(size), 0) AS last_5_min_size_bytes FROM pg_catalog.pg_ls_waldir() WHERE modification > CURRENT_TIMESTAMP - '5 minutes' :: INTERVAL) x;"
+  metrics:
+  - last_5min_size_bytes:
+      usage: "GAUGE"
+      description: "Current size in bytes of the last 5 minutes of WAL generation. Includes recycled WALs."
+  - total_size_bytes:
+      usage: "GAUGE"
+      description: "Current size in bytes of the WAL directory"
+
+

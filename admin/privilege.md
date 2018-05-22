@@ -268,7 +268,7 @@ REVOKE [ GRANT OPTION FOR ]
     [ CASCADE | RESTRICT ]
 
 REVOKE [ GRANT OPTION FOR ]
-    { { SELECT | UPDATE } [, ...] | ALL [ PRIVILEGES ] }
+    { { SELE CT | UPDATE } [, ...] | ALL [ PRIVILEGES ] }
     ON LARGE OBJECT loid [, ...]
     FROM { [ GROUP ] role_name | PUBLIC } [, ...]
     [ CASCADE | RESTRICT ]
@@ -296,4 +296,25 @@ REVOKE [ ADMIN OPTION FOR ]
     [ CASCADE | RESTRICT ]
 
 ```
+
+
+
+|         对象         | 权限                                                         |
+| :------------------: | ------------------------------------------------------------ |
+|       DATABASE       | CREATE, CONNECT, TEMPORARY, TEMP                             |
+|      TABLESPACE      | CREATE                                                       |
+|      **SCHEMA**      | CREATE, USAGE                                                |
+|      **TABLE**       | SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES,TRIGGER |
+|     **SEQUENCE**     | USAGE, SELECT, UPDATE                                        |
+|     **FUNCTION**     | EXECUTE                                                      |
+|         TYPE         | USAGE                                                        |
+|        DOMAIN        | USAGE                                                        |
+| FOREIGN DATA WRAPPER | USAGE                                                        |
+|    FOREIGN SERVER    | USAGE                                                        |
+|       LANGUAGE       | USAGE                                                        |
+|     LARGE OBJECT     | SELECT, UPDATE                                               |
+
+
+
+
 

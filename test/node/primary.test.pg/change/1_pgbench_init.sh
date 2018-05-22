@@ -1,0 +1,1 @@
+pg_bench test -i -s10

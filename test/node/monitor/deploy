@@ -1,0 +1,97 @@
+#!/bin/bash
+
+set -uo pipefail
+
+#==============================================================#
+# File      :   deploy
+# Mtime     :   2019-03-12
+# Desc      :   Deploy sql/bash change to remote server
+# Path      :   node/<id>/deploy
+# Author    :   Vonng(fengruohang@outlook.com)
+#==============================================================#
+
+# module info
+__MODULE_DEPLOY="deploy"
+
+PROG_DIR="$(cd $(dirname $0) && pwd)"
+PROG_NAME="$(basename $0)"
+
+NODE_NAME=$(basename ${PROG_DIR})
+NODE_NAME=${NODE_NAME%%.*}
+
+
+function deploy() {
+    local change_file=${1}
+    local node=${2-${NODE_NAME}}
+
+    if [[ ! -f ${change_file} ]]; then
+        echo "error: file ${change_file} not exists"
+        return 2
+    fi
+
+    # copy change file to remote /tmp
+    local change_filename=$(basename ${change_file})
+    scp ${change_file} "${node}:/tmp/${change_filename}"
+
+    if [[ $? != 0 ]]; then
+        echo "error: copy file ${change_file} to ${node}:/tmp failed"
+        return 3
+    fi
+
+    # deploy it
+    ssh ${node} "sudo -iu postgres /pg/bin/deploy.sh /tmp/${change_filename}"
+
+    if [[ $? != 0 ]]; then
+        echo "error: deploy ${change_file} failed"
+        return 4
+    fi
+
+    echo "deploy change ${change_file} to ${node}"
+    return 0
+}
+
+
+# deploy all changes in dir change
+function deploy_all_changes(){
+    local change_list=$(ls change | sort -n)
+
+    for entry in ${change_list}
+    do
+        echo "deploying ${entry}"
+        deploy change/${entry}
+    done
+}
+
+#==============================================================#
+#                              Main                            #
+#==============================================================#
+function main(){
+    cd ${PROG_DIR}
+    if [[ $1 == 'init' ]]; then
+        # this will deploy all changes in the change directory
+        # ordered by ls | sort -n
+        deploy_all_changes
+    else
+        deploy $@
+    fi
+
+    cd -
+    return $?
+}
+
+#==============================================================#
+#                             Main                             #
+#==============================================================#
+# Args:
+#   $1  action: download | install | launch (install by default)
+#
+# Code:
+#   0   ok
+#   1   insufficient privilege
+#   2   download consul failed
+#   3   decompress consul failed
+#   4   create user consul failed
+#   5   get local IP failed
+#   6   launch consul.service failed
+#==============================================================#
+main $@

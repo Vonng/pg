@@ -1,0 +1,19 @@
+[Unit]
+Description=pgbouncer_exporter for prometheus
+Documentation=https://github.com/larseen/pgbouncer_exporter
+Wants=pgbouncer.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=postgres
+Group=postgres
+Environment=PGSSLMODE=disable
+Environment=PGPORT=6432
+Environment=PGHOST=/var/run/postgresql
+Environment=PGDATABASE=pgbouncer
+ExecStart=/usr/local/bin/pgbouncer_exporter -pgBouncer.connectionString=postgres://postgres@:6432/pgbouncer
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

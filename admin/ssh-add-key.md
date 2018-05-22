@@ -47,7 +47,7 @@ Host 10.xxx.xxx.*
 
 # Common Settings
 Host *
-	User vonng
+	User xxxxxxxxxxxxxx
 	PreferredAuthentications publickey,password
 	Compression yes
 	ServerAliveInterval 30

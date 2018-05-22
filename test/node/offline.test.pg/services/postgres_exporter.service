@@ -1,0 +1,20 @@
+[Unit]
+Description=PostgreSQL metrics exporter for prometheus
+Wants=postgresql.service
+Wants=network-online.target
+After=network-online.target
+ConditionFileNotEmpty=/etc/postgres_exporter/env
+ConditionFileNotEmpty=/etc/postgres_exporter/queries.yaml
+
+[Service]
+User=postgres
+Group=postgres
+EnvironmentFile=/etc/postgres_exporter/env
+ExecStartPre=-/usr/bin/chown -R postgres:postgres /etc/systemd/system/postgres_exporter.service /etc/postgres_exporter
+
+ExecStart=/usr/local/bin/postgres_exporter
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

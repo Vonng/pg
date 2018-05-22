@@ -1,0 +1,22 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+
+rule_files:
+
+scrape_configs:
+- job_name: 'consul'
+  consul_sd_configs:
+    - server: 'localhost:8500'
+      tag: exporter
+
+  relabel_configs:
+    - source_labels: [ '__meta_consul_node' ]
+      action: replace
+      target_label: instance
+      regex: '(.*)'

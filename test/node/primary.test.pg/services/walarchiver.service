@@ -1,0 +1,17 @@
+[Unit]
+Description=PostgreSQL WAL Archiver
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=forking
+User=postgres
+Group=postgres
+EnvironmentFile=/etc/walarchiver/env
+
+ExecStart=/usr/local/bin/walarchiver start -d ${DBNAME} -D ${WALDIR} -S ${SLOT_NAME} -Z ${COMPRESS}
+ExecStop=/usr/local/bin/walarchiver  stop
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

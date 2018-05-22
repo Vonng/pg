@@ -1,0 +1,37 @@
+{
+  "datacenter": "dc",
+  "node_name": "offline.test.pg",
+  "data_dir": "/var/lib/consul",
+  "bind_addr": "10.10.10.12",
+  "retry_join": ["primary.test.pg","primary.meta.pg"],
+  "log_level": "INFO",
+  "server": false,
+  "ui": false,
+  "services": [
+    {
+      "name": "test001o01.postgresql",
+      "tags": ["postgresql"],
+      "port": 5432
+    },
+    {
+      "name": "test001o01.pgbouncer",
+      "tags": ["pgbouncer"],
+      "port": 6432
+    },
+    {
+      "name": "test001o01.node_exporter",
+      "tags": ["exporter"],
+      "port": 9100
+    },
+    {
+      "name": "test001o01.postgres_exporter",
+      "tags": ["exporter"],
+      "port": 9187
+    },
+    {
+      "name": "meta001o01.pgbouncer_exporter",
+      "tags": ["exporter"],
+      "port": 9127
+    }
+  ]
+}

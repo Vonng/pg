@@ -1,0 +1,23 @@
+[Unit]
+Description=PostgreSQL database server
+Documentation=https://www.postgresql.org
+After=network.target
+
+[Service]
+Type=forking
+User=postgres
+Group=postgres
+
+# Disable OOM kill on the postmaster
+OOMScoreAdjust=-1000
+Environment=PG_OOM_ADJUST_FILE=/proc/self/oom_score_adj
+Environment=PG_OOM_ADJUST_VALUE=0
+Environment=PGDATA=/pg/data
+
+ExecStart=/usr/pgsql/bin/pg_ctl  start  -D /pg/data -s -w -t 300
+ExecStop=/usr/pgsql/bin/pg_ctl   stop   -D /pg/data -s -m fast
+ExecReload=/usr/pgsql/bin/pg_ctl reload -D /pg/data -s
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target

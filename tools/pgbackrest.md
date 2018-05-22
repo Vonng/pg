@@ -8,7 +8,13 @@ type: "post"
 
 # PgBackRest 2 中文文档
 
+## 前言
+
 pgBackRest主页：http://pgbackrest.org
+
+pgBackRest Github主页：https://github.com/pgbackrest/pgbackrest
+
+
 
 pgBackRest旨在提供一个简单可靠，容易纵向扩展的PostgreSQL备份恢复系统。
 
@@ -172,7 +178,7 @@ sudo rm -rf /usr/lib/perl5/pgBackRest
 sudo rm -rf /usr/share/perl5/pgBackRest
 ```
 
-pgBackRest是用Perl编写的，默认包含在Debian / Ubuntu中。一些额外的模块也必须安装，但是它们可以作为标准包使用。
+pgBackRest是用Perl编写的，默认包含在Debian/Ubuntu中。一些额外的模块也必须安装，但是它们可以作为标准包使用。
 
 * db-primary⇒安装必需的Perl软件包
 
@@ -184,7 +190,7 @@ sudo yum install -y pgbackrest
 sudo apt-get install libdbd-pg-perl libio-socket-ssl-perl libxml-libxml-perl
 ```
 
-适用于pgBackRest的Debian / Ubuntu软件包位于apt.postgresql.org。如果没有为您的发行版/版本提供，则可以轻松下载源代码并手动安装。
+适用于pgBackRest的Debian / Ubuntu软件包位于[apt.postgresql.org](https://www.postgresql.org/download/linux/ubuntu/)。如果没有为您的发行版/版本提供，则可以轻松下载源代码并手动安装。
 
 * db-primary⇒下载pgBackRest的2.01版本
 
@@ -268,18 +274,25 @@ Use 'pgbackrest help [command]' for more information.
 
 ### mac version
 
-在MacOS上安装可以按照之前的手动安装教程
+在MacOS上安装可以按照之前的手动安装教程，参考文章：https://hunleyd.github.io/posts/pgBackRest-2.07-and-macOS-Mojave/
 
 ```bash
-# install homebrew & wget
+# 注意如果需要从终端访问代理，可以使用以下命令：
+alias proxy='export all_proxy=socks5://127.0.0.1:1080'
+alias unproxy='unset all_proxy'
+
+# 安装 homebrew & wget
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 brew install wget
 
 # install perl DB driver: Pg
+perl -MCPAN -e 'install Bundle::DBI'
 perl -MCPAN -e 'install Bundle::DBD::Pg'
+perl -MCPAN -e 'install IO::Socket::SSL'
+perl -MCPAN -e 'install XML::LibXML'
 
 # Download and unzip
-wget https://github.com/pgbackrest/pgbackrest/archive/release/1.27.tar.gz
+wget https://github.com/pgbackrest/pgbackrest/archive/release/2.07.tar.gz
 
 # Copy to Perls lib
 sudo cp -r  ~/Downloads/pgbackrest-release-1.27/lib/pgBackRest /Library/Perl/5.18
