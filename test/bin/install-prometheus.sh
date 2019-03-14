@@ -106,7 +106,7 @@ function install_prometheus() {
 		cp -f /opt/conf/prometheus.yml /etc/prometheus/prometheus.yml
 	else
 		echo "info: overwrite /etc/prometheus/prometheus.yml"
-		cat > /etc/prometheus.d/prometheus.json <<- 'EOF'
+		cat > /etc/prometheus/prometheus <<- 'EOF'
 		global:
 		  scrape_interval:     15s
 		  evaluation_interval: 15s
@@ -117,6 +117,7 @@ function install_prometheus() {
 		    - targets:
 
 		rule_files:
+		  - "alert.rules"
 
 		scrape_configs:
 		- job_name: 'consul'
@@ -131,6 +132,16 @@ function install_prometheus() {
 		      regex: '(.*)'
 		EOF
 	fi
+
+	# copy alert.rules to /etc/prometheus
+	if [[ -f /opt/conf/alert.rules ]]; then
+		echo "info: found alert.yml in /opt/conf, copy alert.yml /etc/prometheus/"
+		rm -rf /etc/prometheus/alert.rules
+		cp -f /opt/conf/alert.rules /etc/prometheus/alert.rules
+	else
+		touch /etc/prometheus/alert.rules
+	fi
+	chown prometheus:prometheus /etc/prometheus/alert.rules
 
 	# init prometheus services
 	if [[ -f /opt/conf/services/prometheus.service ]]; then

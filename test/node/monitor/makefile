@@ -158,3 +158,32 @@ consul-show-services:
 consul-update-conf:
 	scp consul.json $(NODE):/tmp/consul.json
 	ssh $(NODE) 'sudo mv -f /tmp/consul.json /etc/consul.d/consul.json; sudo chown -R consul:consul /etc/consul.d/'
+	
+
+
+
+prometheus-start:
+	ssh $(NODE) "sudo systemctl start prometheus"
+
+prometheus-stop:
+	ssh $(NODE) "sudo systemctl stop prometheus"
+
+prometheus-restart:
+	ssh $(NODE) "sudo systemctl restart prometheus"
+
+prometheus-reload:
+	scp prometheus.yml $(NODE):/tmp/prometheus.yml
+	ssh $(NODE) "sudo mv -f /tmp/prometheus.yml /etc/prometheus/prometheus.yml; sudo chown -R prometheus:prometheus /etc/prometheus"
+	ssh $(NODE) "sudo systemctl restart prometheus"
+
+prometheus-status:
+	ssh $(NODE) "sudo systemctl status prometheus"
+
+prometheus-show-conf:
+	ssh $(NODE) "sudo cat /etc/prometheus.d/prometheus.json"
+
+prometheus-show-nodes:
+	ssh $(NODE) "prometheus catalog nodes"
+
+prometheus-show-services:
+	ssh $(NODE) "prometheus catalog services"

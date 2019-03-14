@@ -10,12 +10,11 @@ set -uo pipefail
 # Author    :   Vonng(fengruohang@outlook.com)
 # Depend    :   pg_receivewal, psql, .pgpass
 # Note      :
-#   Make sure:
 #     * set `wal_keep_segments` to an appropriate value (1000)
 #     * role have replication privilege
 #     * credential is provided via url or .pgpass
-# This is write for PostgreSQL 10+
-# But you can try ln -sf pg_receivexlog pg_receivewal for 9.x
+#     * This is write for PostgreSQL 10+
+#       But you can try ln -sf pg_receivexlog pg_receivewal for 9.x
 #==============================================================#
 
 
@@ -1000,7 +999,7 @@ function main() {
         drop      ) walarchiver_drop    $@;;
 
         # waldir
-        recover   ) walarchiver_recover  $@;;
+        recover   ) walarchiver_recover $@;;
         remove    ) walarchiver_remove  $@;;
         cleanup   ) walarchiver_cleanup $@;;
         rewind    ) walarchiver_rewind  $@;;

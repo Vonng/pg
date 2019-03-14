@@ -1,6 +1,6 @@
 # PostgreSQL Testing Environment
 
-This repo provide a testing environment of PostgreSQL cluster via [vagrant](https://vagrantup.com/), Which provide a minimal HA Unit consist of 3 nodes: [Primary](node/primary.test.pg), [Standby](node/standby.test.pg), [Offline](node/offline.test.pg) , and a battery included [Monitor](node/monitor) system with a simple CMDB. 
+This repo provides a testing environment of PostgreSQL cluster via [vagrant](https://vagrantup.com/), providing a minimal HA Unit consists of 3 nodes: [Primary](node/primary.test.pg), [Standby](node/standby.test.pg), [Offline](node/offline.test.pg) , and a battery included [Monitor](node/monitor) system with a simple CMDB. 
 
 This repo is also about illustrating some best practice on running PostgreSQL in production.
 
@@ -12,46 +12,46 @@ This repo is also about illustrating some best practice on running PostgreSQL in
 
 ### Install
 
-Make sure you already have [Vagrant](https://vagrantup.com/) installed with a proper VM provider ([VirtualBox](https://www.virtualbox.org/)), Then perform following steps in command line (Assume you are using Mac, or *nix environment with proper settings)
+Make sure you already have [Vagrant](https://vagrantup.com/) installed with a proper VM provider ([VirtualBox](https://www.virtualbox.org/)), Then perform following steps in command line (Assume you are using Mac, or Linux environment with proper settings)
 
 ```bash
-# Step 1: install vagrant & VirtualBox
+# Step 1: install dependencies: vagrant & VirtualBox
 brew install vagrant
 open https://www.virtualbox.org/wiki/Downloads
 
 # Step 2: clone this repo and enter
 git clone https://github.com/Vonng/pg && cd pg/test
 
-# Step 3: only run this for the first time to setup DNS to your localhost
+# Step 3: setup DNS for your localhost
 sudo make dns
 ```
 
-### Setup
+### Run
 
 ```bash
-# teardown and launch all four instance
-make new
-
-# init database cluster & setup replication, initialize database schema & deploy changes
-make init
-
-# going to dashboard (default: admin/admin)
-make view
+# create and launch all four nodes
+make
 ```
+
+Then you can view
 
 * Grafana dashboard: http://monitor:3000 
 * Prometheus Console: http://monitor:9090
 
+### Tips
+
 ```bash
-# These command will add activity to database
-make test
+# This will download package to pkg/ , accelerating init process
+# It may takes 5~20 min to finish you first time init without cache.
+make download
+
+# This will give you a whold new cluster without reinstall all things
+make init
+
+# These will shutdown and brings up your four nodes
+make up
+make halp
 ```
-
-### Notes
-
-It may take 5~20 minutes to complete the first-time-run init procdure, depends on your network condition (some package already put in `pkg` while some package still needs download). After that if you **** things up ,if it is just about database stuff. Run `make init` will gives you a whole new cluster in serval seconds.
-
-![](doc/img/process.png)
 
 
 

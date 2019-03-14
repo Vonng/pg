@@ -1,0 +1,154 @@
+groups:
+- name: db-alerts
+  rules:
+  - alert: DB_POSTGRES_PRIMARY_DOWN
+    expr: avg_over_time(pg_up{instance=~"(.*primary.*pg)"}[2m]) < 0.3
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P0
+    annotations:
+      summary: "{{$labels.instance}} DB Postgres Primary Down: {{ $value }}"
+      description: "{{$labels.instance}} DB Postgres Primary Down: {{ $value }}"
+
+  - alert: DB_STANDBY_POSTGRES_DOWN
+    expr: avg_over_time(pg_up{instance=~".*(standby|offline).*pg"}[2m]) < 0.3
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} DB Postgres Standby Down: {{ $value }}"
+      description: "{{$labels.instance}} DB Postgres Standby Down: {{ $value }}"
+
+
+  - alert: DB_CPU_USAGE_HIGH
+    expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle",instance=~".*pg.*"}[1m])) BY (instance) > 0.5
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} CPU Usage High: {{ $value }}"
+      description: "{{$labels.instance}} CPU All Core Usage Higher than 50% percent: {{ $value }}"
+
+  - alert: DB_RAM_USAGE_HIGH
+    expr: (node_memory_Buffers_bytes{instance=~".*pg.*"} + node_memory_MemFree_bytes{instance=~".*pg.*"} +  node_memory_Cached_bytes{instance=~".*pg.*"}) /  node_memory_MemTotal_bytes{instance=~".*pg.*"} < 0.1 and rate(node_memory_SwapFree_bytes{instance=~".*pg.*"}[1m]) >= 0
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} RAM Usage High: {{ $value }}"
+      description: "{{$labels.instance}} RAM Usage Higher than 90 Percent: {{ $value }}"
+
+  - alert: DB_DISK_USAGE_HIGH
+    expr:  (node_filesystem_free_bytes{instance=~".*pg.*",device="/dev/sda1"} / node_filesystem_size_bytes{instance=~".*pg.*",device="/dev/sda1"}) < 0.1
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} Disk Free Space Less Than 10 Percent: {{ $value }}"
+      description: "{{$labels.instance}} Disk {{$labels.device}} {{$labels.fstype}} {{$labels.mountpoint}} Free Space Less Than 10 Percent: {{ $value }}"
+
+  - alert: DB_REPLCATION_LAG_HIGH
+    expr: pg_replication_flush_diff{instance=~".*pg.*", application_name!~"pg_receivewal"} > 102400000
+    for: 10m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} to {{$labels.application_name}} Replication Lag: {{ $value }}"
+      description: "{{$labels.instance}} to {{$labels.application_name}} Replication Lag {{ $value }}"
+
+  - alert: DB_AGE_HIGH
+    expr: max(pg_database_age{instance=~".*pg.*"}) by (instance) > 600000000
+    for: 10m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} DB_AGE_HIGH: {{ $value }}"
+      description: "{{$labels.instance}} DB_AGE_HIGH: {{ $value }}"
+
+  - alert: DB_ACTIVE_SESSION_HIGH
+    expr: pg_activity_state_count{instance=~".*pg",state="active",datname!~'(postgres|template.)'} > 30
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} DB_ACTIVE_SESSION_HIGH Active connection: {{ $value }}"
+      description: "{{$labels.instance}} DB_ACTIVE_SESSION_HIGH Active connection: {{ $value }}"
+
+  - alert: DB_IDLE_IN_XACT_SESSION_HIGH
+    expr: pg_activity_state_count{instance=~".*pg",state="idle in transaction",datname!~'(postgres|template.)'} > 5
+    for: 1m
+    labels:
+      team: DBA
+      urgency: P1
+    annotations:
+      summary: "{{$labels.instance}} DB_IDLE_IN_XACT_SESSION_HIGH IdleInXact connection: {{ $value }}"
+      description: "{{$labels.instance}} DB_IDLE_IN_XACT_SESSION_HIGH IdleInXact connection: {{ $value }}"
+
+
+  - alert: DB_CPU_USAGE_WARN
+    expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle",instance=~".*pg.*"}[1m])) BY (instance) > 0.3
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P2
+    annotations:
+      summary: "{{$labels.instance}} CPU Usage Warning: {{ $value }}"
+      description: "{{$labels.instance}} CPU Usage Warning: {{ $value }}"
+
+  - alert: DB_CPU_ONE_CORE_HIGH
+    expr: min(rate(node_cpu_seconds_total{mode="idle",instance=~".*pg.*"}[1m])) BY (instance, cpu) < 0.1
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P2
+    annotations:
+      summary: "{{$labels.instance}} DB_CPU_ONE_CORE_HIGH {{$labels.cpu}}: {{ $value }}"
+      description: "{{$labels.instance}} DB_CPU_ONE_CORE_HIGH {{$labels.cpu}}: {{ $value }}"
+
+  - alert: DB_RAM_USAGE_WARN
+    expr: (node_memory_Buffers_bytes{instance=~".*pg.*"} + node_memory_MemFree_bytes{instance=~".*pg.*"} +  node_memory_Cached_bytes{instance=~".*pg.*"}) /  node_memory_MemTotal_bytes{instance=~".*pg.*"} < 0.2
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P2
+    annotations:
+      summary: "{{$labels.instance}} DB_RAM_USAGE_WARN: {{ $value }}"
+      description: "{{$labels.instance}} RAM Usage Higher than 90 Percent: {{ $value }}"
+
+  - alert: DB_DISK_USAGE_WARN
+    expr:  (node_filesystem_free_bytes{instance=~".*pg.*",device="/dev/sda1"} / node_filesystem_size_bytes{instance=~".*pg.*",device="/dev/sda1"}) < 0.25
+    for: 2m
+    labels:
+      team: DBA
+      urgency: P2
+    annotations:
+      summary: "{{$labels.instance}} Disk Free Space Less Than 25 Percent: {{ $value }}"
+      description: "{{$labels.instance}} Disk {{$labels.device}} {{$labels.fstype}} {{$labels.mountpoint}} Free Space Less Than 10 Percent: {{ $value }}"
+
+  - alert: DB_REPLCATION_LAG_WARN
+    expr: pg_replication_flush_diff{instance=~".*pg.*", application_name!~"pg_receivewal"} > 10240000
+    for: 10m
+    labels:
+      team: DBA
+      urgency: P2
+    annotations:
+      summary: "{{$labels.instance}} DB_REPLCATION_LAG_WARN to {{$labels.application_name}} Replication Lag: {{ $value }}"
+      description: "{{$labels.instance}} DB_REPLCATION_LAG_WARN to {{$labels.application_name}} Replication Lag  {{ $value }}"
+
+  - alert: DB_AGE_WARN
+    expr: max(pg_database_age{instance=~".*pg.*"}) by (instance) > 250000000
+    for: 10m
+    labels:
+      team: DBA
+      urgency: P2
+    annotations:
+      summary: "{{$labels.instance}} DB_AGE_WARN: {{ $value }}"
+      description: "{{$labels.instance}} DB_AGE_WARN: {{ $value }}"
