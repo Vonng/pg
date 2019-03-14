@@ -192,6 +192,7 @@ function init_postgres_user(){
 	alias vconf='vi /pg/data/postgresql.conf'
 	alias va='vi /pg/data/pg_hba.conf'
 	alias ve='vi /pg/data/recovery.conf'
+	alias sc='sudo systemctl'
 	EOF
 
     # chown & chmod

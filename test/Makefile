@@ -32,12 +32,6 @@ dns:
 test:
 	ssh primary sudo -iu postgres pgbench test -T1800 -c5 -n
 
-alias:
-	echo primary standby offline monitor | xargs -n1 -I{} ssh {} "echo \"alias pg='sudo su postgres'\" >> ~/.bash_profile"
-	echo primary standby offline monitor | xargs -n1 -I{} ssh {} "echo \"alias root='sudo su'\" >> ~/.bash_profile"
-	echo primary standby offline monitor | xargs -n1 -I{} ssh {} "echo \"alias st='sudo systemctl'\" >> ~/.bash_profile"
-	echo primary standby offline monitor | xargs -n1 -I{} ssh {} "echo \"alias psql='sudo -iu postgres psql'\" >> ~/.bash_profile"
-
 suspend:
 	vagrant suspend
 
@@ -66,4 +60,4 @@ dump-monitor:
 	scp monitor:/var/lib/grafana/grafana.db node/monitor/
 
 
-.PHONY: new clean up init halt initdb deploy ssh dns test alias suspend resume status download download-yum view prom dump-monitor
+.PHONY: new clean up init halt initdb deploy ssh dns test suspend resume status download download-yum view prom dump-monitor

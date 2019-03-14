@@ -30,7 +30,7 @@
       "port": 9187
     },
     {
-      "name": "meta001m01.pgbouncer_exporter",
+      "name": "test001m01.pgbouncer_exporter",
       "tags": ["exporter"],
       "port": 9127
     }
