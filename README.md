@@ -23,7 +23,7 @@ PostgreSQL Docker集群：docker
 - [x] [区块链与分布式数据库](misc/blockchain-and-database.md)
 - [x] [一致性：一个过载的术语](misc/consistency-linearizability.md)
 - [x] [架构演化：成熟度模型](misc/maturity-model.md)
-- [x] [行业杂文](misc/industry/README.md)
+- [x] [杂文](misc/industry/README.md)
 
 
 
@@ -187,6 +187,8 @@ PostgreSQL Docker集群：docker
 ## 原理
 
 - [x] [并发控制原理](src/concurrent-control.md)
+- [x] [PostgresSQL变更数据捕获——CDC应用，原理与实践](src/logical-decoding.md)
+- [ ] [PostgreSQL前后端协议](src/wire-protocol.md)
 - [ ] [PostgreSQL的逻辑结构与物理结构](src/logical-arch.md)
 - [ ] [事务隔离等级](src/isolation-level.md)
 - [ ] B树索引的原理与实现细节
