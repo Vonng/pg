@@ -1,4 +1,4 @@
-# PostgreSQL变更数据捕获
+# PostgreSQL变更事件捕获 (CDC)
 
 [TOC]
 
@@ -16,230 +16,280 @@
 
 * CDC（ChangeDataCapture）则着眼于变更，以流式的方式持续收集状态变化事件（变更）。
 
-ETL大家都耳熟能详，每天批量跑ETL任务，从生产OLTP数据库**拉取（E）**，**转换（T）**格式，**导入（L）**数据仓库，在此不赘述。相对ETL，CDC算是个新鲜玩意，随着流计算的崛起也越来越多地进入人们的视线。
+ETL大家都耳熟能详，每天批量跑ETL任务，从生产OLTP数据库 **拉取（E）** ， **转换（T）** 格式， **导入（L）** 数仓，在此不赘述。相比ETL而言，CDC算是个新鲜玩意，随着流计算的崛起也越来越多地进入人们的视线。
 
 **变更数据捕获（change data capture, CDC）**是一种观察写入数据库的所有数据变更，并将其提取并转换为可以复制到其他系统中的形式的过程。 CDC很有意思，特别是当**变更**能在被写入数据库后立刻用于后续的**流处理**时。
 
-例如，你可以捕获数据库中的变更，并不断将相同的变更应用至**搜索索引**（e.g elasticsearch）。如果变更日志以相同的顺序应用，则可以预期搜索索引中的数据与数据库中的数据是匹配的。同理，这些变更也可以应用于后台刷新**缓存**（redis），导入**数据仓库**（EventSourcing，存储不可变的事实事件记录而不是每天取快照），**收集统计数据与监控**，等等等等。在这种意义下，外部索引，缓存，数仓都成为了PostgreSQL在逻辑上的从库，这些衍生数据系统都成为了变更流的消费者。（所以应用只需要操心怎样把数据写入数据库，而不是终日操心保持这么多异构数据组件同步的问题）。
+例如用户可以捕获数据库中的变更，并不断将相同的变更应用至**搜索索引**（e.g elasticsearch）。如果变更日志以相同的顺序应用，则可以预期的是，搜索索引中的数据与数据库中的数据是匹配的。同理，这些变更也可以应用于后台刷新**缓存**（redis），送往**消息队列（Kafka）**，导入**数据仓库**（EventSourcing，存储不可变的事实事件记录而不是每天取快照），**收集统计数据与监控（Prometheus）**，等等等等。在这种意义下，外部索引，缓存，数仓都成为了**PostgreSQL在逻辑上的从库**，这些衍生数据系统都成为了变更流的消费者，而PostgreSQL成为了整个**数据系统**的主库。在这种架构下，应用只需要操心怎样把数据写入数据库，剩下的事情交给CDC即可。系统设计可以得到极大地简化：所有的数据组件都能够自动与主库在逻辑上保证（最终）一致。用户不用再为如何保证多个异构数据系统之间数据同步而焦头烂额了。
 
 ![](../img/cdc-system.png)
+
+实际上PostgreSQL自10.0版本以来提供的**逻辑复制（logical replication）**功能，实质上就是一个**CDC应用**：从主库上提取变更事件流：`INSERT, UPDATE, DELETE, TRUNCATE`，并在另一个PostgreSQL**主库**实例上重放。如果这些增删改事件能够被解析出来，它们就可以用于任何感兴趣的消费者，而不仅仅局限于另一个PostgreSQL实例。
+
+
+
+### 逻辑复制
+
+想在传统关系型数据库上实施CDC并不容易，关系型数据库本身的**预写式日志WAL** 实际上就是数据库中变更事件的记录。因此从数据库中捕获变更，基本上可以认为等价于消费数据库产生的WAL日志/复制日志。（当然也有其他的变更捕获方式，例如在表上建立触发器，当变更发生时将变更记录写入另一张变更日志表，客户端不断tail这张日志表，当然也有一定的局限性）。
+
+大多数数据库的复制日志的问题在于，它们一直被当做数据库的内部实现细节，而不是公开的API。客户端应该通过其数据模型和查询语言来查询数据库，而不是解析复制日志并尝试从中提取数据。许多数据库根本没有记录在案的获取变更日志的方式。因此捕获数据库中所有的变更然后将其复制到其他状态存储（搜索索引，缓存，数据仓库）中是相当困难的。
+
+此外，**仅有** 数据库变更日志仍然是不够的。如果你拥有 **全量** 变更日志，当然可以通过重放日志来重建数据库的完整状态。但是在许多情况下保留全量历史WAL日志并不是可行的选择（例如磁盘空间与重放耗时的限制）。	例如，构建新的全文索引需要整个数据库的完整副本 —— 仅仅应用最新的变更日志是不够的，因为这样会丢失最近没有更新过的项目。因此如果你不能保留完整的历史日志，那么你至少需要包留一个一致的数据库快照，并保留从该快照开始的变更日志。
+
+因此实施CDC，数据库至少需要提供以下功能：
+
+1. 获取数据库的**变更日志（WAL）**，并解码成逻辑上的事件（对表的增删改而不是数据库的内部表示）
+
+2. 获取数据库的"**一致性快照**"，从而订阅者可以从任意一个一致性状态开始订阅而不是数据库创建伊始。
+
+3. 保存**消费者偏移量**，以便跟踪订阅者的消费进度，及时清理回收不用的变更日志以免撑爆磁盘。
+
+我们会发现，PostgreSQL在实现逻辑复制的同时，已经提供了一切CDC所需要的基础设施。
+
+* **逻辑解码（Logical Decoding）**，用于从WAL日志中解析逻辑变更事件
+* **复制协议（Replication Protocol）**：提供了消费者实时订阅（甚至同步订阅）数据库变更的机制
+* **快照导出（export snapshot）**：允许导出数据库的一致性快照（`pg_export_snapshot`） 
+* **复制槽（Replication Slot）**，用于保存消费者偏移量，跟踪订阅者进度。
+
+因此，在PostgreSQL上实施CDC最为直观优雅的方式，**就是按照PostgreSQL的复制协议编写一个"逻辑从库"** ，从数据库中实时地，流式地接受逻辑解码后的变更事件，完成自己定义的处理逻辑，并及时向数据库汇报自己的消息消费进度。就像使用Kafka一样。在这里CDC客户端可以将自己伪装成一个PostgreSQL的从库，从而不断地实时从PostgreSQL主库中接收逻辑解码后的变更内容。同时CDC客户端还可以通过PostgreSQL提供的**复制槽（Replication Slot）**机制来保存自己的**消费者偏移量**，即消费进度，实现类似消息队列**一至少次**的保证，保证不错过变更数据。(客户端自己记录消费者偏移量跳过重复记录，即可实现"**恰好一次** "的保证 )
 
 
 
 ### 逻辑解码
 
-PostgreSQL本身的**预写式日志WAL**就是变更事件的记录。大多数数据库的复制日志的问题在于，它们一直被当做数据库的内部实现细节，而不是公开的API。客户端应该通过其数据模型和查询语言来查询数据库，而不是解析复制日志并尝试从中提取数据。许多数据库根本没有记录在案的获取变更日志的方式。因此捕获数据库中所有的变更然后将其复制到其他状态存储（搜索索引，缓存，数据仓库）中是相当困难的。
+在开始进一步的讨论之前，让我们先来看一看期待的输出结果到底是什么样子。
 
-不过，PostgreSQL在9.4版本后提供了一种称为**逻辑解码（Logical Decoding）**的机制，提供了一套从数据库中获取变更的机制。它允许对数据库进行变更时，将数据库的变更（WAL二进制记录）解码成为逻辑变更（表增删改事件），并以流式的方式发送给订阅者。
-
-逻辑解码要解决的问题是这样的，虽然PostgreSQL的WAL日志中已经包含了完整的，权威的变更事件记录，但这种记录格式过于底层。用户并不会对磁盘上某个数据页里的二进制变感兴趣，他们感兴趣的是某张表中增删改了哪些行哪些字段。**逻辑解码**就是将物理变更记录翻译为用户期望的逻辑变更事件的机制。
-
-即：逻辑解码可以将数据库的二进制变更内容（文件A页面B偏移量C追加写入二进制数据D）翻译为逻辑上用户感兴趣的事件（表A上的增删改事件）。
-
-例，PostgreSQL WAL日志中的二进制变更内容（使用`pg_waldump`解析）
+PostgreSQL的变更事件以**二进制内部表示**形式保存在预写式日志（WAL）中，使用其自带的`pg_waldump`工具可以解析出来一些人类可读的信息：
 
 ```
 rmgr: Btree       len (rec/tot):     64/    64, tx:       1342, lsn: 2D/AAFFC9F0, prev 2D/AAFFC810, desc: INSERT_LEAF off 126, blkref #0: rel 1663/3101882/3105398 blk 4
 rmgr: Heap        len (rec/tot):    485/   485, tx:       1342, lsn: 2D/AAFFCA30, prev 2D/AAFFC9F0, desc: INSERT off 10, blkref #0: rel 1663/3101882/3105391 blk 139
 ```
 
-我们想要的逻辑解码后的内容：
+WAL日志里包含了完整权威的变更事件记录，但这种记录格式过于底层。用户并不会对磁盘上某个数据页里的二进制变更（文件A页面B偏移量C追加写入二进制数据D）感兴趣，他们感兴趣的是某张表中增删改了哪些行哪些字段。**逻辑解码**就是将物理变更记录翻译为用户期望的逻辑变更事件的机制（例如表A上的增删改事件）。
+
+例如用户可能期望的是，能够解码出等价的SQL语句
+
+```
+INSERT INTO public.test (id, data) VALUES (14, 'hoho');
+```
+
+或者最为通用的JSON结构（这里以JSON格式记录了一条UPDATE事件）
 
 ```json
-{"change":[{"kind":"insert","schema":"public","table":"test","columnnames":["id","data"],"columntypes":["integer","text"],"columnvalues":[12,"xixi"]}]}
-
-{"change":[{"kind":"update","schema":"public","table":"test","columnnames":["id","data"],"columntypes":["integer","text"],"columnvalues":[1,"hoho"],"oldkeys":{"keynames":["id"],"keytypes":["integer"],"keyvalues":[1]}}]}
+{
+  "change": [
+    {
+      "kind": "update",
+      "schema": "public",
+      "table": "test",
+      "columnnames": ["id", "data" ],
+      "columntypes": [ "integer", "text" ],
+      "columnvalues": [ 1, "hoho"],
+      "oldkeys": { "keynames": [ "id"],
+        "keytypes": ["integer" ],
+        "keyvalues": [1]
+      }
+    }
+  ]
+}
 ```
 
+当然也可以是更为紧凑高效严格的Protobuf格式，更为灵活的Avro格式，抑或是任何用户感兴趣的格式。
+
+**逻辑解码** 所要解决的问题，就是将数据库内部二进制表示的变更事件，**解码（Decoding）**成为用户感兴趣的格式。之所以需要这样一个过程，是因为数据库内部表示是非常紧凑的，想要解读原始的二进制WAL日志，不仅仅需要WAL结构相关的知识，还需要**系统目录（System Catalog）**，即元数据。没有元数据就无从得知用户可能感兴趣的模式名，表名，列名，只能解析出来的一系列数据库自己才能看懂的oid。
+
+关于流复制协议，复制槽，事务快照等概念与功能，这里就不展开了，让我们进入动手环节。
 
 
-### 逻辑复制
 
-解决了变更内容形式的问题，另一个问题在于怎么样"**订阅**"变更。用户期望的是一个类似于Kafka消费者的接口，用户的客户端程序可以不断地接受最新的变更通知，而不是自己去轮询，或者去人肉解析已经落盘的日志。PostgreSQL的Replication接口提供了这样一种功能，在这里，CDC客户端可以将自己伪装成一个PostgreSQL的从库，从而不断地实时从PostgreSQL主库中接收逻辑解码后的变更内容。同时CDC客户端还可以通过PostgreSQL提供的**复制槽（Replication Slot）**机制来保存自己的**消费者偏移量**，即消费进度，从而实现类似消息队列**恰好一次**的保证，保证不错过变更数据。
+## 快速开始
+
+假设我们有一张用户表，我们希望捕获任何发生在它上面的变更，假设数据库发生了如下变更操作
+
+下面会重复用到这几条命令
 
 ```sql
-postgres=# table pg_stat_replication; -- 查看当前从库
--[ RECORD 1 ]----+------------------------------
-pid              | 14082
-usesysid         | 10
-usename          | vonng
-application_name | cdc
-client_addr      | 10.1.1.95
-client_hostname  |
-client_port      | 56609
-backend_start    | 2019-05-19 13:14:34.606014+08
-backend_xmin     |
-state            | streaming
-sent_lsn         | 2D/AB269AB8     -- 服务端已经发送的消息坐标
-write_lsn        | 2D/AB269AB8     -- 客户端已经执行完写入的消息坐标
-flush_lsn        | 2D/AB269AB8     -- 客户端已经刷盘的消息坐标（不会丢失）
-replay_lsn       | 2D/AB269AB8     -- 客户端已经应用的消息坐标（已经生效）
-write_lag        |
-flush_lag        |
-replay_lag       |
-sync_priority    | 0
-sync_state       | async
+DROP TABLE IF EXISTS users;
+CREATE TABLE users(id SERIAL PRIMARY KEY, name TEXT);
 
-postgres=# table pg_replication_slots;  -- 查看当前复制槽
--[ RECORD 1 ]-------+------------
-slot_name           | test
-plugin              | decoder_raw
-slot_type           | logical
-datoid              | 13382
-database            | postgres
-temporary           | f
-active              | t
-active_pid          | 14082
-xmin                |
-catalog_xmin        | 1371
-restart_lsn         | 2D/AB269A80       -- 下次客户端重连时将从这里开始重放
-confirmed_flush_lsn | 2D/AB269AB8       -- 客户端确认完成的消息进度
+INSERT INTO users VALUES (100, 'Vonng');
+INSERT INTO users VALUES (101, 'Xiao Wang');
+DELETE FROM users WHERE id = 100;
+UPDATE users SET name = 'Lao Wang' WHERE id = 101;
 ```
 
+最终数据库的状态是：只有一条`(101, 'Lao Wang')`的记录。无论是曾经有一个名为`Vonng`的用户存在过的痕迹，抑或是隔壁老王也曾年轻过的事实，都随着对数据库的删改而烟消云散。我们希望这些事实不应随风而逝，需要被记录下来。
 
+### 操作流程
 
+通常来说，订阅变更需要以下几步操作：
 
+* 选择一个一致性的数据库快照，作为订阅变更的起点。(创建一个复制槽)
+* (数据库发生了一些变更)
+* 读取这些变更，更新自己的的消费进度。
 
+那么， 让我们先从最简单的办法开始，从PostgreSQL自带的的SQL接口开始
 
+### SQL接口
 
-## 快速上手
-
-### 从SQL接口开始
-
-逻辑复制槽的增删查
+逻辑复制槽的增删查API：
 
 ```sql
+TABLE pg_replication_slots; -- 查
 pg_create_logical_replication_slot(slot_name name, plugin name) -- 增
 pg_drop_replication_slot(slot_name name) -- 删
-TABLE pg_replication_slots; -- 查
 ```
 
-从逻辑复制槽中获取最新的变更数据
+从逻辑复制槽中获取最新的变更数据：
 
 ```sql
 pg_logical_slot_get_changes(slot_name name, ...)  -- 消费掉
 pg_logical_slot_peek_changes(slot_name name, ...) -- 只查看不消费
 ```
 
-文档提供的逻辑解码样例：https://www.postgresql.org/docs/11/logicaldecoding-example.html
+在正式开始前，还需要对数据库参数做一些修改，修改`wal_level = logical`，这样在WAL日志中的信息才能足够用于逻辑解码。
 
 ```sql
--- create table & slot
-DROP TABLE IF EXISTS test;
-CREATE TABLE test(id SERIAL PRIMARY KEY, data TEXT);
+-- 创建一个复制槽test_slot，使用系统自带的测试解码插件test_decoding，解码插件会在后面介绍
 SELECT * FROM pg_create_logical_replication_slot('test_slot', 'test_decoding');
 
--- test1
-INSERT INTO test(data) VALUES ('xixi');
-INSERT INTO test(data) VALUES ('haha');
-SELECT * FROM pg_logical_slot_get_changes('test_slot', NULL, NULL);
+-- 重放上面的建表与增删改操作
+-- DROP TABLE | CREATE TABLE | INSERT 1 | INSERT 1 | DELETE 1 | UPDATE 1
 
--- test2
-UPDATE test SET data = 'hoho' WHERE id = 1;
-DELETE FROM test WHERE id = 2;
+-- 读取复制槽test_slot中未消费的最新的变更事件流
 SELECT * FROM  pg_logical_slot_get_changes('test_slot', NULL, NULL);
+    lsn    | xid |                                data
+-----------+-----+--------------------------------------------------------------------
+ 0/167C7E8 | 569 | BEGIN 569
+ 0/169F6F8 | 569 | COMMIT 569
+ 0/169F6F8 | 570 | BEGIN 570
+ 0/169F6F8 | 570 | table public.users: INSERT: id[integer]:100 name[text]:'Vonng'
+ 0/169F810 | 570 | COMMIT 570
+ 0/169F810 | 571 | BEGIN 571
+ 0/169F810 | 571 | table public.users: INSERT: id[integer]:101 name[text]:'Xiao Wang'
+ 0/169F8C8 | 571 | COMMIT 571
+ 0/169F8C8 | 572 | BEGIN 572
+ 0/169F8C8 | 572 | table public.users: DELETE: id[integer]:100
+ 0/169F938 | 572 | COMMIT 572
+ 0/169F970 | 573 | BEGIN 573
+ 0/169F970 | 573 | table public.users: UPDATE: id[integer]:101 name[text]:'Lao Wang'
+ 0/169F9F0 | 573 | COMMIT 573
 
--- drop slot
+-- 清理掉创建的复制槽
 SELECT pg_drop_replication_slot('test_slot');
 ```
 
+这里，我们可以看到一系列被触发的事件，其中每个事务的开始与提交都会触发一个事件。因为目前逻辑解码机制不支持DDL变更，因此`CREATE TABLE`与`DROP TABLE`并没有出现在事件流中，只能看到空荡荡的`BEGIN+COMMIT`。另一点需要注意的是，只有**成功提交的事务才会产生逻辑解码变更事件**。也就是说用户不用担心收到并处理了很多行变更消息之后，最后发现事务回滚了，还需要担心怎么通知消费者去会跟变更。
+
+通过SQL接口，用户已经能够拉取最新的变更了。这也就意味着任何有着PostgreSQL驱动的语言都可以通过这种方式从数据库中捕获最新的变更。当然这种方式实话说还是略过于土鳖。更好的方式是利用PostgreSQL的复制协议直接从数据库中订阅变更数据流。当然相比使用SQL接口，这也需要更多的工作。
+
+
+
 ### 使用客户端接收变更
 
-下面是使用PostgreSQL自带的CDC客户端程序持续接收逻辑解码产生的数据流的例子。
+在编写自己的CDC客户端之前，让我们先来试用一下官方自带的CDC客户端样例——`pg_recvlogical`。与`pg_receivewal`类似，不过它接收的是逻辑解码后的变更，下面是一个具体的例子：
 
 ```bash
-# 启动一个CDC客户端，连接数据库postgres，创建名为test_slot的槽，使用decoder_raw解码插件，标准输出
-pg_recvlogical -d postgres \
+# 启动一个CDC客户端，连接数据库postgres，创建名为test_slot的槽，使用test_decoding解码插件，标准输出
+pg_recvlogical \
+	-d postgres \
 	--create-slot --if-not-exists --slot=test_slot \
-	--plugin=decoder_raw --start -f -
+	--plugin=test_decoding \
+	--start -f -
 
-# 开启另一个会话，执行以下命令，观察上一会话的输出结果。
-psql -c 'DROP TABLE IF EXISTS test; CREATE TABLE test(id SERIAL PRIMARY KEY, data TEXT);'
-psql postgres -c "INSERT INTO test(data) VALUES ('xixi');"
-psql postgres -c "UPDATE test SET data = 'hoho' WHERE id = 1;"
+# 开启另一个会话，重放上面的建表与增删改操作
+# DROP TABLE | CREATE TABLE | INSERT 1 | INSERT 1 | DELETE 1 | UPDATE 1
 
-# 输出结果
-BEGIN 51286
-table public.test: INSERT: id[integer]:11 data[text]:'xixi'
-COMMIT 51286
-BEGIN 51287
-table public.test: UPDATE: id[integer]:1 data[text]:'hoho'
-COMMIT 51287
+# pg_recvlogical输出结果
+BEGIN 585
+COMMIT 585
+BEGIN 586
+table public.users: INSERT: id[integer]:100 name[text]:'Vonng'
+COMMIT 586
+BEGIN 587
+table public.users: INSERT: id[integer]:101 name[text]:'Xiao Wang'
+COMMIT 587
+BEGIN 588
+table public.users: DELETE: id[integer]:100
+COMMIT 588
+BEGIN 589
+table public.users: UPDATE: id[integer]:101 name[text]:'Lao Wang'
+COMMIT 589
 
-# 擦屁股：删除创建的复制槽
+# 清理：删除创建的复制槽
 pg_recvlogical -d postgres --drop-slot --slot=test_slot
 ```
 
-### 输出解释
-
-PostgreSQL的变更日志（WAL）是紧凑的二进制格式，而且需要一些系统目录（catalog）中的元数据才能正确解读。因此外部组件想要像Parse MySQL Binlog一样尝试直接从PostgreSQL WAL中解析变更事件出来是比较麻烦的。PostgreSQL9.4开始提供了逻辑解码机制，即，在变更事件（事务开始，结束，行的增删改）发生时，通过调用输出插件提供的**回调函数**，把这些事件格式化成特定形式并输出。
-
 上面的例子中，主要的变更事件包括事务的**开始**与**结束**，以及**数据行的增删改**。这里默认的`test_decoding`插件的输出格式为：
 
-```
+```sql
 BEGIN {事务标识}
 table {模式名}.{表名} {命令INSERT|UPDATE|DELETE}  {列名}[{类型}]:{取值} ...
 COMMIT {事务标识}
 ```
 
+实际上，PostgreSQL的逻辑解码是这样工作的，每当特定的事件发生（表的Truncate，行级别的增删改，事务开始与提交），PostgreSQL都会调用一系列的钩子函数。所谓的**逻辑解码输出插件（Logical Decoding Output Plugin）**，就是这样一组回调函数的集合。它们接受二进制内部表示的变更事件作为输入，查阅一些系统目录，将二进制数据翻译成为用户感兴趣的结果。
 
 
-## 其他输出格式
 
-获取变更只是问题之一，需要解决的第二个问题是选择合适的输出格式。PostgreSQL自带的`test_decoding`插件使用的是很朴素的输出格式：
+### 逻辑解码输出插件
 
-```
-BEGIN 51281
-table public.test: INSERT: id[integer]:8 data[text]:'hoho'
-COMMIT 51281
-BEGIN 51282
-table public.test: INSERT: id[integer]:9 data[text]:'xixi'
-COMMIT 51282
-```
+除了PostgreSQL自带的"用于测试"的逻辑解码插件：[`test_decoding`](https://github.com/postgres/postgres/blob/master/contrib/test_decoding/test_decoding.c) 之外，还有很多现成的输出插件，例如：
 
-这种输出格式已经包含了大部分我们感兴趣的信息：表名称，模式名称，每一列的名称，类型，以及取值。
+- JSON格式输出插件：[`wal2json`](https://github.com/eulerto/wal2json)
+- SQL格式输出插件：[`decoder_raw`](https://github.com/michaelpq/pg_plugins/tree/master/decoder_raw)
+- Protobuf输出插件：[`decoderbufs`](https://github.com/debezium/postgres-decoderbufs)
 
-不过这样的格式并不适合解析，想当然的解析逻辑很可能会被一些特殊字符所破坏。更为通用的格式，例如SQL，JSON，Protobuf也许是一个更好的选择。
+当然还有PostgreSQL自带逻辑复制所使用的解码插件：`pgoutput`，其消息格式[文档地址](https://www.postgresql.org/docs/11/protocol-logicalrep-message-formats.html)。
 
-PostgreSQL Wiki给出了一系列逻辑解码输出插件：https://wiki.postgresql.org/wiki/Logical_Decoding_Plugins
-
-* PostgreSQL自带的逻辑解码输出插件：https://github.com/postgres/postgres/blob/master/contrib/test_decoding/test_decoding.c
-* JSON格式输出插件：https://github.com/eulerto/wal2json
-* SQL格式输出插件：https://github.com/michaelpq/pg_plugins/tree/master/decoder_raw
-* Protobuf输出插件：https://github.com/debezium/postgres-decoderbufs
-* 当然还有PostgreSQL自带逻辑复制所使用的消息格式：https://www.postgresql.org/docs/11/protocol-logicalrep-message-formats.html
-
-安装这些插件是很简单的，有一些输出插件（例如`wal2json`）可以直接从官方二进制源轻松安装。即使是编译安装也并不复杂，编译这些插件时只需要确保`pg_config`已经在你的`PATH`中，然后执行`make & sudo make install`两板斧即可。
+安装这些插件非常简单，有一些插件（例如`wal2json`）可以直接从官方二进制源轻松安装。
 
 ```bash
-# CentOS
 yum install wal2json11
-
-# Ubuntu
 apt install postgresql-11-wal2json
+```
 
-# 这次使用wal2json作为输出插件
-pg_recvlogical -d postgres \
-	--create-slot --if-not-exists --slot=test_slot \
+或者如果没有二进制包，也可以自己下载编译。只需要确保`pg_config`已经在你的`PATH`中，然后执行`make & sudo make install`两板斧即可。以输出SQL格式的`decoder_raw`插件为例：
+
+```bash
+git clone https://github.com/michaelpq/pg_plugins && cd pg_plugins/decoder_raw
+make && sudo make install
+```
+
+使用`wal2json`接收同样的变更
+
+```bash
+pg_recvlogical -d postgres --drop-slot --slot=test_slot
+pg_recvlogical -d postgres --create-slot --if-not-exists --slot=test_slot \
 	--plugin=wal2json --start -f -
 ```
 
-再次执行上面的变更命令，输出结果变为JSON格式：
+结果为：
 
 ```json
-{"change":[{"kind":"insert","schema":"public","table":"test","columnnames":["id","data"],"columntypes":["integer","text"],"columnvalues":[12,"xixi"]}]}
-
-{"change":[{"kind":"update","schema":"public","table":"test","columnnames":["id","data"],"columntypes":["integer","text"],"columnvalues":[1,"hoho"],"oldkeys":{"keynames":["id"],"keytypes":["integer"],"keyvalues":[1]}}]}
+{"change":[]}
+{"change":[{"kind":"insert","schema":"public","table":"users","columnnames":["id","name"],"columntypes":["integer","text"],"columnvalues":[100,"Vonng"]}]}
+{"change":[{"kind":"insert","schema":"public","table":"users","columnnames":["id","name"],"columntypes":["integer","text"],"columnvalues":[101,"Xiao Wang"]}]}
+{"change":[{"kind":"delete","schema":"public","table":"users","oldkeys":{"keynames":["id"],"keytypes":["integer"],"keyvalues":[100]}}]}
+{"change":[{"kind":"update","schema":"public","table":"users","columnnames":["id","name"],"columntypes":["integer","text"],"columnvalues":[101,"Lao Wang"],"oldkeys":{"keynames":["id"],"keytypes":["integer"],"keyvalues":[101]}}]}
 ```
 
-换用`decoder_raw`插件，输出结果变为SQL语句，注意解码得到的SQL语句效果等价于原语句，但形式上并不一定相同。
+而使用`decoder_raw`获取SQL格式的输出
 
 ```bash
-$ pg_recvlogical -d postgres \
-→ --create-slot --if-not-exists --slot=test_slot \
-→ --plugin=decoder_raw --start -f -
-INSERT INTO public.test (id, data) VALUES (13, 'xixi');
-INSERT INTO public.test (id, data) VALUES (14, 'hoho');
+pg_recvlogical -d postgres --drop-slot --slot=test_slot
+pg_recvlogical -d postgres --create-slot --if-not-exists --slot=test_slot \
+	--plugin=decoder_raw --start -f -
+```
+
+结果为：
+
+```sql
+INSERT INTO public.users (id, name) VALUES (100, 'Vonng');
+INSERT INTO public.users (id, name) VALUES (101, 'Xiao Wang');
+DELETE FROM public.users WHERE id = 100;
+UPDATE public.users SET id = 101, name = 'Lao Wang' WHERE id = 101;
 ```
 
 `decoder_raw`可以用于抽取SQL形式表示的状态变更，将这些抽取得到的SQL语句在同样的基础状态上重放，即可得到相同的结果。PostgreSQL就是使用这样的机制实现逻辑复制的。
@@ -251,23 +301,27 @@ pg_recvlogical -d <new_master_url> --slot=test_slot --plugin=decoder_raw --start
 psql <old_master_url>
 ```
 
-既然可以将变更事件转化为SQL格式，当然也可以转换成各种各样的其他格式，例如解码输出为Redis的kv操作用于后台刷新缓存，或者仅仅抽取一些关键字段用于更新统计数据或者构建外部索引。怎样使用这些变更事件流有着很大的想象空间。
+另一个有趣的场景是UNDO LOG。PostgreSQL的故障恢复是基于REDO LOG的，通过重放WAL会到历史上的任意时间点。在数据库模式不发生变化的情况下，如果只是单纯的表内容增删改出现了失误，完全可以利用类似`decoder_raw`的方式反向生成UNDO日志。提高此类故障恢复的速度。
 
-逻辑解码输出插件的编写可以参阅这一篇官方文档：https://www.postgresql.org/docs/11/logicaldecoding-output-plugin.html。编写自定义的逻辑解码输出插件一点儿都不复杂，因为逻辑解码输出插件本质上不过是一个拼字符串的回调函数集合，往往只有一个简单的两三百行都C文件，在官方样例的基础上稍作修改，即可实现一个你自己的逻辑解码输出插件。
+最后，输出插件可以将变更事件格式化为各种各样的形式。解码输出为Redis的kv操作，或者仅仅抽取一些关键字段用于更新统计数据或者构建外部索引，有着很大的想象空间。
+
+编写自定义的逻辑解码输出插件并不复杂，可以参阅[这篇](https://www.postgresql.org/docs/11/logicaldecoding-output-plugin.html)官方文档。毕竟逻辑解码输出插件本质上只是一个拼字符串的回调函数集合。在[官方样例](https://github.com/postgres/postgres/blob/master/contrib/test_decoding/test_decoding.c)的基础上稍作修改，即可轻松实现一个你自己的逻辑解码输出插件。
 
 
 
 ## CDC客户端
 
-PostgreSQL自带了一个名为`pg_recvlogical`的客户端应用，可以将逻辑变更的事件流写至标准输出。但并不是所有的消费者都可以或者愿意使用Unix Pipe来完成所有工作的。此外，根据端到端原则，使用`pg_recvlogical`将变更数据流落盘并不意味着消费者已经拿到并确认了该消息，只有消费者自己亲自向数据库确认才可以。
+PostgreSQL自带了一个名为`pg_recvlogical`的客户端应用，可以将逻辑变更的事件流写至标准输出。但并不是所有的消费者都可以或者愿意使用Unix Pipe来完成所有工作的。此外，根据端到端原则，使用`pg_recvlogical`将变更数据流落盘并不意味着消费者已经拿到并确认了该消息，只有消费者自己亲自向数据库确认才可以做到这一点。
 
-编写CDC客户端，实际上是实现了一个"猴版”数据库从库，实现了一个逻辑复制订阅者。客户端向数据库建立一条Replication连接，假装自己是一个从库，从主库获取解码或者原始二进制的变更数据流，并周期性地向主库汇报自己的消费进度（落盘进度，刷盘进度，应用进度）。
+编写PostgreSQL的CDC客户端程序，本质上是实现了一个"猴版”数据库从库。客户端向数据库建立一条**复制连接（Replication Connection）** ，将自己伪装成一个从库：从主库获取解码后的变更消息流，并周期性地向主库汇报自己的消费进度（落盘进度，刷盘进度，应用进度）。
+
+
 
 ### 复制连接
 
-CDC客户端通常会使用**复制连接（Replication Connection）**，来从数据库捕获变更事件。复制连接，顾名思义，就是用于物理/逻辑复制的特殊数据库连接。设置连接参数`replication`即可建立复制连接
+复制连接，顾名思义就是用于**复制（Replication）** 的特殊连接。当与PostgreSQL服务器建立连接时，如果连接参数中提供了`replication=database|on|yes|1`，就会建立一条复制连接，而不是普通连接。复制连接可以执行一些特殊的命令，例如`IDENTIFY_SYSTEM`, `TIMELINE_HISTORY`, `CREATE_REPLICATION_SLOT`, `START_REPLICATION`, `BASE_BACKUP`, 在逻辑复制的情况下，还可以执行一些简单的SQL查询。具体细节可以参考PostgreSQL官方文档中前后端协议一章：https://www.postgresql.org/docs/current/protocol-replication.html
 
-譬如下面这条命令就会建立一条复制连接
+譬如，下面这条命令就会建立一条复制连接：
 
 ```bash
 $ psql 'postgres://localhost:5432/postgres?replication=on&application_name=mocker'
@@ -287,19 +341,23 @@ client_hostname  |
 client_port      | 53420
 ```
 
-复制连接可以执行一些特殊的命令，例如`IDENTIFY_SYSTEM`, `TIMELINE_HISTORY`, `CREATE_REPLICATION_SLOT`, `START_REPLICATION`, `BASE_BACKUP`, 在逻辑复制的情况下，还可以执行一些简单的SQL查询。具体细节可以参考PostgreSQL官方文档中前后端协议一章：https://www.postgresql.org/docs/current/protocol-replication.html
+
 
 ### 编写自定义逻辑
 
-无论是JDBC还是Go语言的PostgreSQL驱动，都提供了相应的接口。这里让我们用Go语言编写一个简单的CDC客户端，从数据库持续接受变更数据流。
+无论是JDBC还是Go语言的PostgreSQL驱动，都提供了相应的基础设施，用于处理复制连接。
+
+这里让我们用Go语言编写一个简单的CDC客户端，样例使用了[`jackc/pgx`](https://github.com/jackx/pgx)，一个很不错的Go语言编写的PostgreSQL驱动。这里的代码只是作为概念演示，因此忽略掉了错误处理。将下面的代码保存为`main.go`，执行`go run main.go`即可执行。默认的三个参数分别为数据库连接串，逻辑解码输出插件的名称，以及复制槽的名称。
 
 ```go
 package main
 
 import (
-	"log"
-	"time"
 	"context"
+	"log"
+	"os"
+	"time"
+
 	"github.com/jackc/pgx"
 )
 
@@ -351,6 +409,7 @@ func (s *Subscriber) DropReplicationSlot() {
 			s.Conn.Close()
 		}
 		conn.Exec("SELECT pg_drop_replication_slot($1)", s.Slot)
+		log.Printf("drop replication slot %s", s.Slot)
 	}
 }
 
@@ -360,8 +419,9 @@ func (s *Subscriber) Subscribe() {
 	for {
 		// 等待一条消息, 消息有可能是真的消息，也可能只是心跳包
 		message, _ = s.Conn.WaitForReplicationMessage(context.Background())
-		if message.WalMessage != nil { // 如果是真的消息就消费它，可能是成功写入kafka，或者只是简单地打印出来。
-			log.Printf("Message: %s", string(message.WalMessage.WalData))
+		if message.WalMessage != nil {
+			// 如果是真的消息就消费它，可能是成功写入kafka，或者只是简单地打印出来。
+			log.Printf("[LSN] %s [Message] %s", pgx.FormatLSN(message.WalMessage.WalStart), string(message.WalMessage.WalData))
 			if message.WalMessage.WalStart > s.LSN { // 更新消费进度并向主库汇报
 				s.LSN = message.WalMessage.WalStart + uint64(len(message.WalMessage.WalData))
 				s.ReportProgress()
@@ -374,14 +434,28 @@ func (s *Subscriber) Subscribe() {
 }
 
 func main() {
+	dsn := "postgres://localhost:5432/postgres?application_name=cdc"
+	plugin := "test_decoding"
+	slot := "test_slot"
+	if len(os.Args) > 1 {
+		dsn = os.Args[1]
+	}
+	if len(os.Args) > 2 {
+		plugin = os.Args[2]
+	}
+	if len(os.Args) > 3 {
+		slot = os.Args[3]
+	}
+
 	subscriber := &Subscriber{
-		URL:    "postgres://10.1.1.10:5432/postgres?application_name=cdc",
-		Slot:   "test",
-		Plugin: "decoder_raw",
+		URL:    dsn,
+		Slot:   slot,
+		Plugin: plugin,
 	} // 创建新的CDC客户端
-	subscriber.DropReplicationSlot()       // 如果存在，清理掉遗留的Slot
+	subscriber.DropReplicationSlot() // 如果存在，清理掉遗留的Slot
+
 	subscriber.Connect()                   // 建立复制连接
-	defer subscriber.DropReplicationSlot() // 擦屁股
+	defer subscriber.DropReplicationSlot() // 程序中止前清理掉复制槽
 	subscriber.CreateReplicationSlot()     // 创建复制槽
 	subscriber.StartReplication()          // 开始接收变更流
 	go func() {
@@ -389,29 +463,66 @@ func main() {
 			time.Sleep(5 * time.Second)
 			subscriber.ReportProgress()
 		}
-	}() // 协程2周期性地向主库汇报进度
+	}() // 协程2每5秒地向主库汇报进度
 	subscriber.Subscribe() // 主消息循环
 }
 
+```
+
+在另一个数据库会话中再次执行上面的变更，可以看到客户端及时地接收到了变更的内容。这里客户端只是简单地将其打印了出来，实际生产中，客户端可以完成**任何工作**，比如写入Kafka，写入Redis，写入磁盘日志，或者只是更新内存中的统计数据并暴露给监控系统。甚至，还可以通过配置**同步提交**，确保所有系统中的变更能够时刻保证严格同步（当然相比默认的异步模式比较影响性能就是了）。
+
+对于PostgreSQL主库而言，这看起来就像是另一个从库。
+
+```sql
+postgres=# table pg_stat_replication; -- 查看当前从库
+-[ RECORD 1 ]----+------------------------------
+pid              | 14082
+usesysid         | 10
+usename          | vonng
+application_name | cdc
+client_addr      | 10.1.1.95
+client_hostname  |
+client_port      | 56609
+backend_start    | 2019-05-19 13:14:34.606014+08
+backend_xmin     |
+state            | streaming
+sent_lsn         | 2D/AB269AB8     -- 服务端已经发送的消息坐标
+write_lsn        | 2D/AB269AB8     -- 客户端已经执行完写入的消息坐标
+flush_lsn        | 2D/AB269AB8     -- 客户端已经刷盘的消息坐标（不会丢失）
+replay_lsn       | 2D/AB269AB8     -- 客户端已经应用的消息坐标（已经生效）
+write_lag        |
+flush_lag        |
+replay_lag       |
+sync_priority    | 0
+sync_state       | async
+
+postgres=# table pg_replication_slots;  -- 查看当前复制槽
+-[ RECORD 1 ]-------+------------
+slot_name           | test
+plugin              | decoder_raw
+slot_type           | logical
+datoid              | 13382
+database            | postgres
+temporary           | f
+active              | t
+active_pid          | 14082
+xmin                |
+catalog_xmin        | 1371
+restart_lsn         | 2D/AB269A80       -- 下次客户端重连时将从这里开始重放
+confirmed_flush_lsn | 2D/AB269AB8       -- 客户端确认完成的消息进度
 ```
 
 
 
 
 
-## 限制
+## 局限性
 
-理论和实践之间是存在不少的差异的。想要在生产环境中使用CDC，还需要考虑一些其他的问题。
+想要在生产环境中使用CDC，还需要考虑一些其他的问题。略有遗憾的是，在PostgreSQL CDC的天空上，还飘着两朵小乌云。
 
-### Failover
+### 完备性
 
-对目前PostgreSQL的CDC来说，Failover是最大的难点与痛点。逻辑复制依赖复制槽，而目前的实现而言，复制槽只能用在Master上，且复制槽本身并不会被复制到从库上。因此当主库进行Failover时，就会丢失消费者偏移量。如果在新的主库承接任何写入之前没有重新建好逻辑复制槽，就有可能会丢失一些数据。
-
-因此对于非常严格的场景，使用这个功能时仍然需要谨慎。好在这个问题是可解的，2Quadrant已经提出了Failover Slot的Patch，将会在后续版本中加入并解决这个问题。
-
-### DDL Change
-
-目前PostgreSQL的逻辑解码只提供了以下几个Hook：
+就目前而言，PostgreSQL的逻辑解码只提供了以下几个钩子：
 
 ```
 LogicalDecodeStartupCB startup_cb;
@@ -424,11 +535,44 @@ LogicalDecodeFilterByOriginCB filter_by_origin_cb;
 LogicalDecodeShutdownCB shutdown_cb;
 ```
 
-其中比较重要，也是必须提供的是三个回调函数：
+其中比较重要，也是必须提供的是三个回调函数：begin：事务开始，change：行级别增删改事件，commit：事务提交 。遗憾的是，并不是所有的事件都有相应的钩子，例如数据库的模式变更，Sequence的取值变化，以及特殊的大对象操作。
 
-- begin：事务开始
-- change：行级别增删改事件
-- commit：事务提交
+通常来说，这并不是一个大问题，因为用户感兴趣的往往只是表记录而不是表结构的增删改。而且，如果使用诸如JSON，Avro等灵活格式作为解码目标格式，即使表结构发生变化，也不会有什么大问题。
 
-因此像DDL变化这一类的事件目前还没法从逻辑解码中获得（当然也是有work around的办法）。好消息是这个问题是可解的，后续版本会陆续提供支持。
+但是尝试从目前的变更事件流生成完备的UNDO Log是不可能的，因为目前模式的变更DDL并不会记录在逻辑解码的输出中。好消息是未来会有越来越多的钩子与支持，因此这个问题是可解的。
+
+另外需要注意的一点是，有一些输出插件会无视`Begin`与`Commit`消息。但这两条消息本身也是数据库变更日志的一部分，如果输出插件忽略了这些消息，那么CDC Client在汇报消费进度时就可能会出现偏差（落后一条消息的偏移量）。在一些边界条件下，这可能会触发一些问题。(例如使用了同步提交，主库迟迟等不到从库的确认而卡住)
+
+### 故障切换
+
+理想很美好，现实很骨感。当一切正常时，CDC工作流工作的很好。但当数据库出现故障，或者出现故障转移时，事情就变得比较棘手了。
+
+#### 恰好一次保证
+
+另外一个使用PostgreSQL CDC的问题是消息队列中经典的**恰好一次**问题。
+
+PostgreSQL的逻辑复制实际上提供的是**至少一次**保证，因为消费者偏移量的值会在检查点的时候保存。如果PostgreSQL主库宕机，那么重新发送变更事件的起点，不一定恰好等于上次订阅者已经消费的位置。因此有可能会发送重复的消息。
+
+解决方法是：逻辑复制的消费者也需要记录自己的消费者偏移量，以便跳过重复的消息，实现真正的**恰好一次** 消息传达保证。这并不是一个真正的问题，只是任何试图自行实现CDC客户端的人都应当注意这一点。
+
+#### Failover Slot
+
+对目前PostgreSQL的CDC来说，Failover Slot是最大的难点与痛点。
+
+逻辑复制依赖复制槽，因为复制槽持有着消费者的状态，记录着消费者的消费进度，从而避免了数据库将消费者还没处理的消息回收掉。
+
+但以目前的实现而言，复制槽只能用在**主库**上，且**复制槽本身并不会被复制到从库**上。因此当主库进行Failover时，消费者偏移量就会丢失。如果在新的主库承接任何写入之前没有重新建好逻辑复制槽，就有可能会丢失一些数据。
+
+因此对于非常严格的场景，使用这个功能时仍然需要谨慎。
+
+这个问题的解决方案包括：
+
+* 我不在乎丢一点儿数据。
+* 进行审慎的Failover
+  * 进行Failover前，确保消费者已经追赶至最新进度（可以考虑开启同步提交）。
+  * Failover中，在新的主库承接新的写流量之前，先将复制槽建立好。
+
+* 对于紧急Failover，使用数据库PITR备份事后手工修复缺失的变更数据
+* 等待Failover Slot的Patch合入PostgreSQL主线，有了FailoverSlot，这个问题就不再成为问题。
+
 
