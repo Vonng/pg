@@ -10,7 +10,11 @@
 
 PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
-PostgreSQL Docker集群：docker
+常用PostgreSQL运维脚本：[test/bin](test/bin/)
+
+PostgreSQL Docker Images
+
+PostgreSQL kubernetes environment
 
 
 
@@ -19,7 +23,7 @@ PostgreSQL Docker集群：docker
 - [x] [计算机系为什么要学数据库原理和设计？](misc/why-learn-database.md)
 - [x] [PG好处都有啥？](misc/pg-yoxi.md)
 - [x] [PostgreSQL开发规约](misc/pg-convention.md)
-- [x] [容器中的数据库是一个好主意吗？](misc/postgres-in-docker.md)
+- [x] [容器中的数据库是一个好主意吗？](misc/postgres-in-docker.md) / [Docker vs Bare Metal](misc/docker-vs-bare-metal.md)
 - [x] [区块链与分布式数据库](misc/blockchain-and-database.md)
 - [x] [一致性：一个过载的术语](misc/consistency-linearizability.md)
 - [x] [架构演化：成熟度模型](misc/maturity-model.md)
@@ -35,13 +39,14 @@ PostgreSQL Docker集群：docker
 - [x] [PostgreSQL日志配置](admin/logging.md)
 - [x] [PostgreSQL复制方案](admin/replication-plan.md)
 - [x] [PostgreSQL备份方案](admin/backup-plan.md)
+- [x] [PostgreSQL监控系统]((mon/overview.md))
+- [x] [PostgreSQL报警系统](admin/alert-overview.md)
 - [x] [PostgreSQL变更管理方案](admin/mange-change.md)
-- [ ] [PostgreSQL目录设计](admin/directory-design.md)
+- [x] [PostgreSQL目录设计](admin/directory-design.md)
 
 **备份与复制**
 
 - [ ] [PostgreSQL备份与恢复概览](admin/backup-overview.md)
-- [ ] [级联复制：复制拓扑设计中的权衡](admin/cascade-replication.md)
 - [ ] [PostgreSQL复制延迟问题](admin/replication-delay.md)
 - [ ] 日志传输副本：WAL段复制
 - [ ] 复制拓扑设计：同步、异步、法定人数
@@ -54,17 +59,15 @@ PostgreSQL Docker集群：docker
 - [ ] 备份：机制、流程、问题、方法。
 - [ ] 逻辑备份：pg_dump
 - [ ] PITR生产实践
-- [ ] [PostgreSQL内存相关参数调谐](tune/memory.md)
-- [ ] [PostgreSQL检查点相关参数调谐](tune/checkpoint.md)
-- [ ] [PostgreSQL自动清理相关参数调谐](tune/autovacuum.md)
-- [ ] [操作系统内核参数调优](tune/kernel.md)
+- [ ] [PostgreSQL内存相关参数调谐](admin/tune-memory.md)
+- [ ] [PostgreSQL检查点相关参数调谐](admin/tune-checkpoint.md)
+- [ ] [PostgreSQL自动清理相关参数调谐](admin/tune-autovacuum.md)
+- [ ] [操作系统内核参数调优](admin/tune-kernel.md)
 - [ ] ErrorTracking系统设计概览
-- [ ] PostgreSQL报警系统概览
-
 
 **配置**
 
-- [ ] [PostgreSQL修改配置的方式](admin/config.md)
+- [ ] [PostgreSQL配置修改方式](admin/config.md)
 - [ ] [PostgreSQL客户端认证](admin/hba-auth.md)
 - [ ] [PostgreSQL角色权限](admin/privilege.md)
 
@@ -81,12 +84,13 @@ PostgreSQL Docker集群：docker
 
 **监控**
 
-- [x] [监控系统概览](mon/overview.md)
 - [x] [监控PG中表的大小](mon/size.md)
 - [x] [监控WAL生成速率](mon/wal-rate.md)
 - [x] [关系膨胀：监控与处理](mon/bloat.md)
 - [x] [PG中表占用磁盘空间](mon/size.md)
 - [x] [使用pg_repack整理表与索引](tools/pg_repack.md)
+- [ ] [监控表：空间，膨胀，年龄，IO](mon/table-bloat.md)
+- [ ] [监控索引：空间，膨胀，重复，闲置](mon/index-bloat.md)
 - [ ] 静态监控，配置项与角色
 - [ ] 轻重缓急，快慢分离
 - [ ] 操作系统监控
@@ -97,8 +101,6 @@ PostgreSQL Docker集群：docker
 - [ ] 监控连接
 - [ ] 监控活动
 - [ ] 监控复制延迟
-- [ ] [监控表：空间，膨胀，年龄，IO](monitor/table.md)
-- [ ] [监控索引：空间，膨胀，重复，闲置](monitor/index.md)
 - [ ] 系统级别监控
 - [ ] 监控函数：调用量，时间
 - [ ] 监控连接池：QPS，延迟，排队，连接
@@ -121,8 +123,8 @@ PostgreSQL Docker集群：docker
 - [ ] 客户端大量无超时查询堆积导致故障
 - [ ] 慢查询堆积导致的雪崩，定位与排查
 - [ ] 硬件故障导致的机器重启
-
-
+- [ ] Docker同一数据目录启动两个实例导致数据损坏
+- [ ] 级联复制的配置问题
 
 
 
@@ -156,14 +158,15 @@ PostgreSQL Docker集群：docker
 - [ ] PostgreSQL数据类型 —— 文本类型
 - [ ] PostgreSQL数据类型 —— 文本字面值
 - [ ] PostgreSQL数据类型 —— 网络类型
+- [ ] PostgreSQL 12 JSON
 - [ ] PostgreSQL中的时间与时区
 - [ ] Sequence的方方面面
 - [ ] 常见索引类型及其应用场景
 - [ ] PostgreSQL中的JOIN
 - [ ] [PostgreSQL中的锁及其应用](sql/lock.md)
 - [ ] 子查询还是CTE？
-- [ ] cube应用一例
 - [ ] LATERAL JOIN
+- [ ] DISTINCT ON子句与除重
 - [ ] 递归查询
 - [ ] Advanced SQL
 - [ ] [找出并清除重复的记录](http://blog.theodo.fr/2018/01/search-destroy-duplicate-rows-postgresql/)
@@ -174,7 +177,7 @@ PostgreSQL Docker集群：docker
 
 **驱动**
 
-- [x] [Golang的数据库标准接口教程：database/sql](driver/go-database-tutorial.md)
+- [x] [Golang的数据库标准接口教程：database/sql](tools/go-database-tutorial.md)
 - [ ] PostgreSQL驱动横向评测：Go语言
 - [ ] PostgreSQL Golang驱动介绍：pgx
 - [ ] PostgreSQL Golang驱动介绍：go-pg
@@ -187,20 +190,19 @@ PostgreSQL Docker集群：docker
 ## 原理
 
 - [x] [并发控制原理](src/concurrent-control.md)
-- [x] [PostgresSQL变更数据捕获——CDC应用，原理与实践](src/logical-decoding.md)
-- [ ] [PostgreSQL前后端协议](src/wire-protocol.md)
-- [ ] [PostgreSQL的逻辑结构与物理结构](src/logical-arch.md)
+- [x] [PostgresSQL变更数据捕获](src/logical-decoding.md)
+- [x] [PostgreSQL前后端协议概述](src/wire-protocol.md)
+- [x] [PostgreSQL的逻辑结构与物理结构](src/logical-arch.md)
 - [ ] [事务隔离等级](src/isolation-level.md)
+- [ ] 并发创建索引的实现方式（CREATE INDEX CONCURRENTLY）
+- [ ] GIN索引的实现原理
 - [ ] B树索引的原理与实现细节
 - [ ] 查询处理原理
 - [ ] JOIN类型及其内部实现
 - [ ] VACUUM原理
 - [ ] WAL：PostgreSQL WAL与检查点
-- [ ] Buffer原理
-- [ ] 逻辑解码：变更数据捕获CDC
 - [ ] 流复制原理与实现细节
 - [ ] 二阶段提交：原理与实践
-- [ ] 前后端交互协议：PostgreSQL Wire Protocal
 - [ ] R树原理与实现细节
 - [ ] PostgreSQL数据页结构
 - [ ] FDW的结构与编写
@@ -230,8 +232,6 @@ PostgreSQL Docker集群：docker
 - [x]  [操作系统命令 —— vmstat](tools/unix-vmstat.md)
 - [x]  [操作系统命令 —— iostat](tools/unix-iostat.md)
 
-
-
 **性能测试**
 - [ ] pgbench
 - [ ] [sysbench](tools/sysbench.md)
@@ -255,35 +255,30 @@ PostgreSQL Docker集群：docker
 - [ ] Geometry还是Geography？
 - [ ] QGIS安装与简单使用
 
-**TimescaleDB**
 - [ ] [TimescaleDB安装与使用](tools/timescale-install.md)
 
-**PipelineDB**
 - [ ] [PipelineDB安装](tools/pipeline-intro.md)
 
-**Citus**
 - [ ] Citus安装
 
-**PgAdmin**
 - [ ] [PgAdmin Server 安装](tools/pgadmin-install.md)
 
-**PgBackRest**
 - [ ] [PgBackRest 中文文档](tools/pgbackrest.md)
 
-**PK VS**
-- [ ] MySQL
-- [ ] Oracle
 
 
 
-## 参考
+
+## 参考文档
 
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/current/index.html)
-- [PostgreSQL 10.1 中文文档](http://www.postgres.cn/docs/10/)
+  - [Current](https://www.postgresql.org/docs/current/index.html) ([11](https://www.postgresql.org/docs/11/index.html)) / [10](https://www.postgresql.org/docs/10/index.html) / [9.6](https://www.postgresql.org/docs/9.6/index.html) / [9.5](https://www.postgresql.org/docs/9.5/index.html) / [9.4](https://www.postgresql.org/docs/9.4/index.html) / [12beta](https://www.postgresql.org/docs/devel/index.html)
+
+* [PostgreSQL 中文文档](http://www.postgres.cn/docs/11/)
+  * [Docs4Dev- PostgresQL 11](https://www.docs4dev.com/docs/zh/postgre-sql/11.2/reference/bookindex.html#指数)   /  [11](http://www.postgres.cn/docs/11/) / [10](http://www.postgres.cn/docs/10/)  / [9.6](http://www.postgres.cn/docs/9.6/)
 
 - [PostGIS 2.5 Documentation](https://postgis.net/docs/manual-2.5/)
 - [Citus Documentation](https://docs.citusdata.com/en/v8.0/)
-
 - [TimescaleDB Documentation](https://docs.timescale.com/v1.0/main)
 - [PipelineDB Documentation](http://docs.pipelinedb.com)
 - [Pgbouncer Documentation](https://pgbouncer.github.io/config.html)

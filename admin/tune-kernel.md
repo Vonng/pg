@@ -1,16 +1,12 @@
 
 
-# 数据库机器操作系统内核参数优化
+# 系统内核参数优化 For Database
 
-适用机型：DELL R730 PCI-E SSD  
+针对PostgreSQL，可以对Linux操作系统进行调优，具体包括：
 
-CPU：12核24线程 x 2
-
-内存：384G
-
-硬盘：保存PCI-E SSD 3.2T
-
-
+- IO优化：调度算法调优，预读参数
+- 内存优化：关闭SWAP，关闭透明大页，关闭NUMA。
+- 资源限制
 
 ```bash
 optimize() {
@@ -64,27 +60,6 @@ optimize() {
 		EOF
 		sysctl -p
 
-		if ( ! type -f grubby &>/dev/null  ); then
-			yum install -q -y grubby
-		fi
-		grubby --update-kernel=/boot/vmlinuz-$(uname -r) --args="numa=off transparent_hugepage=never"
-
-		if [[ -x /opt/MegaRAID/MegaCli/MegaCli64 ]]; then
-			/opt/MegaRAID/MegaCli/MegaCli64 -LDSetProp WB -LALL -aALL
-			/opt/MegaRAID/MegaCli/MegaCli64 -LDSetProp ADRA -LALL -aALL
-			/opt/MegaRAID/MegaCli/MegaCli64 -LDSetProp -DisDskCache -LALL -aALL
-			/opt/MegaRAID/MegaCli/MegaCli64 -LDSetProp -Cached -LALL -aALL
-		fi
-
-		if ( ! grep -q 'Database optimisation' /etc/rc.local ); then
-			cat >> /etc/rc.local <<- EOF
-			# Database optimisation
-			echo 'never' > /sys/kernel/mm/transparent_hugepage/enabled
-			echo 'never' > /sys/kernel/mm/transparent_hugepage/defrag
-			#blockdev --setra 16384 $(echo $(blkid | awk -F':' '$1!~"block"{print $1}'))
-			EOF
-			chmod +x /etc/rc.d/rc.local
-		fi
 
 		cat > /etc/security/limits.d/postgresql.conf <<- EOF
 		postgres    soft    nproc       655360
@@ -125,14 +100,3 @@ optimize() {
 
 ```
 
-
-
-# Linux操作系统调优
-
-
-
-针对PostgreSQL，可以对Linux操作系统进行调优，具体包括：
-
-- IO优化：调度算法调优，预读参数
-- 内存优化：关闭SWAP，关闭透明大页，关闭NUMA。
-- 资源限制
