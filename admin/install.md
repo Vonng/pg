@@ -12,7 +12,9 @@ type: "post"
 
 ## 脚本安装
 
-以下脚本用于生产服务器，使用CentOS7系统，默认安装PostgreSQL11
+以下脚本用于生产服务器，使用CentOS7系统，默认安装PostgreSQL11。
+
+默认会创建`uid=256, gid=256`的`postgres`用户，二进制目录为`/usr/pgsql-<major>`，软链接目录为`/usr/pgsql`并创建相应的`path`项。默认数据目录与脚本目录为`/pg`。
 
 [`pg/test/bin/install-postgres.sh`](https://github.com/Vonng/pg/blob/master/test/bin/install-postgres.sh)
 
@@ -20,16 +22,16 @@ type: "post"
 
 ## 手动二进制安装
 
-#### MacOS 二进制
+#### MacOS 
 
-```
+```bash
 brew install postgresql
 brew install postgis
 ```
 
-#### CentOS二进制
+#### CentOS
 
-```
+```bash
 short_version=11
 yum install -q -y \
   postgresql"$short_version" \
@@ -46,7 +48,7 @@ yum install -q -y \
   # postgis2_"$short_version"-client \
 ```
 
-#### Ubuntu二进制
+#### Ubuntu
 
 ```bash
 apt install \
@@ -65,8 +67,6 @@ apt install \
 
 
 ## 源码编译
-
-#### 从源码编译安装
 
 ```bash
 ./configure

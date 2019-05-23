@@ -12,9 +12,9 @@ type: "post"
 
 建议配置PostgreSQL的日志格式为CSV，方便分析，而且可以直接导入PostgreSQL数据表中。
 
+[TOC]
 
-
-## 日志相关配置
+## 日志相关配置项
 
 ```ini
 log_destination ='csvlog'
@@ -33,6 +33,8 @@ track_io_timing =on
 track_functions =all
 track_activity_query_size =16384
 ```
+
+
 
 ## 日志收集
 

@@ -120,13 +120,13 @@ date -r 1500000000 '+%Y-%m-%d %H:%M:%S'		# MacOS, BSD
 
 通常情况下，Unix时间戳是**传递/存储**时间的最佳方式，它通常在计算机内部以整型的形式存在，内容为距离某个特定纪元的秒数。它极为简单，无歧义，存储占用更紧实，便于比较大小，且在程序员之间存在广泛共识。不过，Epoch+整数偏移量的方式适合在机器上进行存储与交换，但它并不是一种人类可读的格式（也许有些程序员可读）。
 
-PostgreSQL提供了丰富的日期时间数据类型与相关函数，它能以高度灵活的方式自动适配各种格式的时间输入输出，并在内部以高效的整型表示进行存储与计算。通常的最佳实践是，只要应用稍具规模或涉及到任何国际化的功能，存储时间就应当使用`TIMESTAMP`类型并存储GMT时间。
+PostgreSQL提供了丰富的日期时间数据类型与相关函数，它能以高度灵活的方式自动适配各种格式的时间输入输出，并在内部以高效的整型表示进行存储与计算。在PostgreSQL中，变量`CURRENT_TIMESTAMP`或函数`now()`会返回当前事务开始时的本地时间戳，返回的类型是`TIMESTAMP WITH TIME ZONE`，这是一个PostgreSQL扩展，会在时间戳上带有额外的时区信息。SQL标准所规定的类型为`TIMESTAMP`，在PostgreSQL中使用8字节的长整型实现。可以使用SQL语法`AT TIME ZONE zone`或内置函数`timezone(zone,ts)`将带有时区的`TIMESTAMP`转换为不带时区的标准版本。
 
-在PostgreSQL中，变量`CURRENT_TIMESTAMP`或函数`now()`会返回当前事务开始时的本地时间戳，返回的类型是`TIMESTAMP WITH TIME ZONE`，这是一个PostgreSQL扩展，会在时间戳上带有额外的时区信息。SQL标准所规定的类型为`TIMESTAMP`，在PostgreSQL中使用8字节的长整型实现。可以使用SQL语法`AT TIME ZONE zone`或内置函数`timezone(zone,ts)`将带有时区的`TIMESTAMP`转换为不带时区的标准版本。
+通常（我认为的）最佳实践是，只要应用稍具规模或涉及到任何国际化的功能，存储时间就应当使用`TIMESTAMP`类型并存储GMT时间，当然，PostgreSQL Wiki中[推荐的方式](https://wiki.postgresql.org/wiki/Don%27t_Do_This#When_should_you.3F_8)是使用PostgreSQL自己的`TimestampTZ`扩展类型，带时区的时间戳是12字节，而不带时区的则为8字节，在固定使用GMT时区的情况下，个人还是更倾向于使用不带时区的`TIMESTAMP`类型。
 
 ```sql
 -- 获取本地事务开始时的时间戳
-vonng=# SELECT now(),CURRENT_TIMESTAMP;
+vonng=# SELECT now(), CURRENT_TIMESTAMP;
               now              |       current_timestamp
 -------------------------------+-------------------------------
  2018-12-11 21:50:15.317141+08 | 2018-12-11 21:50:15.317141+08
@@ -170,5 +170,33 @@ vonng=# TABLE pg_timezone_abbrevs  LIMIT 4;
  ACST   | 09:30:00   | f
  ACT    | -05:00:00  | f
  ...
+```
+
+一个经常让人困惑的问题就是`TIMESTAMP`与`TIMESTAMPTZ`之间的相互转化问题。
+
+```sql
+-- 使用::TIMESTAMP将TIMESTAMPTZ强制转换为TIMESTAMP，直接截断时区部分内容
+-- 时间的其余"内容"保持不变
+vonng=# SELECT now(), now()::TIMESTAMP;
+             now               |           now
+-------------------------------+--------------------------
+ 2018-12-12 05:50:37.770066+08 |  2018-12-12 05:50:37.770066+08
+
+-- 对有时区版TIMESTAMPTZ使用AT TIME ZONE语法
+-- 会将其转换为无时区版的TIMESTAMP，返回给定时区下的时间
+vonng=# SELECT now(), now() AT TIME ZONE 'UTC';
+              now              |          timezone
+-------------------------------+----------------------------
+ 2019-05-23 16:58:47.071135+08 | 2019-05-23 08:58:47.071135
+ 
+ 
+ -- 对无时区版TIMESTAMP使用AT TIME ZONE语法
+-- 会将其转换为带时区版的TIMESTAMPTZ，即在给定时区下解释该无时区时间戳。
+vonng=# SELECT now()::TIMESTAMP, now()::TIMESTAMP AT TIME ZONE 'UTC';
+            now             |           timezone
+----------------------------+-------------------------------
+ 2019-05-23 17:03:00.872533 | 2019-05-24 01:03:00.872533+08
+ 
+ -- 这里的意思是，UTC时间的 2019-05-23 17:03:00
 ```
 

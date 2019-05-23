@@ -34,7 +34,7 @@ type: "post"
 
 备份可以使用`pg_backrest` 作为一条龙解决方案，但这里考虑使用脚本进行备份。
 
-参考：[`backup.sh`](backup.sh)
+参考：[`backup.sh`](../test/bin/pg/backup.sh)
 
 
 
@@ -42,7 +42,7 @@ type: "post"
 
 重整使用`pg_repack`，PostgreSQL自带源里包含了pg_repack
 
-参考：[`repack.sh`](repack.sh)
+参考：[`repack.sh`](../test/bin/pg/repack.sh)
 
 
 
@@ -50,5 +50,5 @@ type: "post"
 
 虽然有AutoVacuum，但手动执行Vacuum仍然有帮助。检查数据库的年龄，当出现老化时及时上报。
 
-参考：[`vacuum.sh`](vacuum.sh)
+参考：[`vacuum.sh`](../test/bin/pg/vacuum.sh)
 

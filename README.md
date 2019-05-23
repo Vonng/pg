@@ -6,16 +6,6 @@
 
 
 
-## 环境
-
-PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
-
-常用PostgreSQL运维脚本：[test/bin](test/bin/)
-
-PostgreSQL Docker Images
-
-PostgreSQL kubernetes environment
-
 
 
 ## 文章
@@ -23,11 +13,21 @@ PostgreSQL kubernetes environment
 - [x] [计算机系为什么要学数据库原理和设计？](misc/why-learn-database.md)
 - [x] [PG好处都有啥？](misc/pg-yoxi.md)
 - [x] [PostgreSQL开发规约](misc/pg-convention.md)
+- [x] [并发异常那些事](src/concurrent-control.md)
 - [x] [容器中的数据库是一个好主意吗？](misc/postgres-in-docker.md) / [Docker vs Bare Metal](misc/docker-vs-bare-metal.md)
+- [x] [理解时间](sql/reason-about-time.md)
 - [x] [区块链与分布式数据库](misc/blockchain-and-database.md)
 - [x] [一致性：一个过载的术语](misc/consistency-linearizability.md)
 - [x] [架构演化：成熟度模型](misc/maturity-model.md)
 - [x] [杂文](misc/industry/README.md)
+
+
+
+## 环境
+
+PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
+
+常用PostgreSQL运维脚本：[test/bin](test/bin/)
 
 
 
@@ -112,11 +112,13 @@ PostgreSQL kubernetes environment
 [**故障**](pit/)
 
 - [x] [故障档案：移走负载导致的性能恶化故障](pit/download-failure.md)
+- [x] [pg_dump导致的血案](pit/search_path.md)
+- [x] [PostgreSQL数据页损坏修复](pit/page-corruption.md)
 - [x] [故障档案：事务ID回卷故障](pit/xid-wrap-around.md)
 - [x] [故障档案：pg_repack导致的故障](pit/pg_repack.md)
 - [x] [故障档案：从删库到跑路](pit/drop-database.md)
-- [x] [PostgreSQL数据页损坏修复](pit/page-corruption.md)
 - [x] [Template0的清理与修复](pit/vacuum-template0.md)
+- [ ] [内存错误导致操作系统丢弃页面缓存](pit/drop-cache.md)
 - [ ] 磁盘写满故障
 - [ ] 救火：杀查询的正确姿势
 - [ ] 存疑事务：提交日志损坏问题分析与修复
@@ -189,7 +191,6 @@ PostgreSQL kubernetes environment
 
 ## 原理
 
-- [x] [并发控制原理](src/concurrent-control.md)
 - [x] [PostgresSQL变更数据捕获](src/logical-decoding.md)
 - [x] [PostgreSQL前后端协议概述](src/wire-protocol.md)
 - [x] [PostgreSQL的逻辑结构与物理结构](src/logical-arch.md)
@@ -276,6 +277,7 @@ PostgreSQL kubernetes environment
 
 * [PostgreSQL 中文文档](http://www.postgres.cn/docs/11/)
   * [Docs4Dev- PostgresQL 11](https://www.docs4dev.com/docs/zh/postgre-sql/11.2/reference/bookindex.html#指数)   /  [11](http://www.postgres.cn/docs/11/) / [10](http://www.postgres.cn/docs/10/)  / [9.6](http://www.postgres.cn/docs/9.6/)
+* [PostgreSQL Commit Fest](https://commitfest.postgresql.org)
 
 - [PostGIS 2.5 Documentation](https://postgis.net/docs/manual-2.5/)
 - [Citus Documentation](https://docs.citusdata.com/en/v8.0/)
