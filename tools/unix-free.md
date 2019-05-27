@@ -113,7 +113,7 @@ buffer/cached = Buffers + Cached
 可以通过以下命令强制清理缓存：
 
 ```bash
-$ sync 								# flush fs buffers
+$ sync # flush fs buffers
 $ echo 1 > /proc/sys/vm/drop_caches	# drop page cache
 $ echo 2 > /proc/sys/vm/drop_caches	# drop dentries & inode
 $ echo 3 > /proc/sys/vm/drop_caches	# drop all

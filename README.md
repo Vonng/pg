@@ -215,9 +215,9 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 **命令行**
 
-- [ ] [psqlrc 使用基础](admin/psql.md)
-- [ ] [批量配置SSH免密登录](admin/ssh-add-key.md)
-- [ ] [组合使用psql与bash](admin/psql-and-bash.md)
+- [x] [psqlrc 使用基础](admin/psql.md)
+- [x] [批量配置SSH免密登录](admin/ssh-add-key.md)
+- [x] [组合使用psql与bash](admin/psql-and-bash.md)
 
 **连接池**
 
@@ -228,10 +228,16 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 **操作系统**
 
-- [x]  [操作系统命令 —— top](tools/unix-top.md)
-- [x]  [操作系统命令 —— free](tools/unix-free.md)
-- [x]  [操作系统命令 —— vmstat](tools/unix-vmstat.md)
-- [x]  [操作系统命令 —— iostat](tools/unix-iostat.md)
+- [x]  [查看系统任务 —— top](tools/unix-top.md)
+- [x]  [查看内存使用 —— free](tools/unix-free.md)
+- [x]  [查看虚拟内存使用 —— vmstat](tools/unix-vmstat.md)
+- [x]  [查看IO —— iostat](tools/unix-iostat.md)
+- [ ]  查看硬盘信息——smartctl
+- [ ]  查看网卡信息——ethtool
+
+**网络**
+
+* [使用Wireshark抓包分析PostgreSQL协议](tools/wireshark-capture.md)
 
 **性能测试**
 - [ ] pgbench

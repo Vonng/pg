@@ -3,17 +3,17 @@ title: "Go数据库教程: database/sql"
 date: "2017-08-24"
 author: "Vonng"
 description: "同JDBC类似，Go也有标准的数据库访问接口。本文详细介绍了database/sql的使用方法和注意事项。"
-categories: ["Dev"]
-featured: ""
-featuredalt: ""
-featuredpath: "/img/blog/golang.jpeg"
-linktitle: ""
+categories: ["PostgreSQL", "Go", "Driver"]
 type: "post"
 ---
 
+
+
+# Go数据库教程: database/sql
+
 Go使用SQL与类SQL数据库的惯例是通过标准库[database/sql](http://golang.org/pkg/database/sql/)。这是一个对关系型数据库的通用抽象，它提供了标准的、轻量的、面向行的接口。不过`database/sql`的包文档只讲它做了什么，却对如何使用只字未提。快速指南远比堆砌事实有用，本文讲述了`database/sql`的使用方法及其注意事项。
 
-<!--more-->
+
 
 ## 1. 顶层抽象
 
@@ -434,7 +434,7 @@ err = rows.Scan(dest...)
 
 - 用`db.SetConnMaxLifetime(d time.Duration)`来限制连接的生命周期。连接超时后，会在需要时惰性回收复用。
 
-  ​
+  
 
 
 ## 9. 微妙行为
