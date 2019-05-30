@@ -5,27 +5,103 @@ tags: ["PostgreSQL","SQL", "Lock"]
 type: "post"
 ---
 
-
-
 # PostgreSQL的锁
+
+PostgreSQL有好几类锁，其中最主要的是**表级锁**与**行级锁**，此外还有页级锁，咨询锁等。。
+
+**表级锁**是由各种命令自动加上的，行级锁是`SELECT FOR UPDATE|SHARE`语句自动加上的。执行数据库操作时，都是先获取表级锁，再获取行级锁。表级锁可以在事务中通过`LOCK`命令显式获取，行级锁由`SELECT`命令显式控制的。
+
+
 
 ## 显式加锁
 
-通常锁会在相应命令执行中自动获取，但也可以手动加锁。
-
-使用LOCK命令加锁
+通常，表级锁会在相应命令执行中自动获取，但也可以手动显式获取。使用LOCK命令加锁的方式：
 
 ```sql
 LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
 ```
 
-### 描述
-
-* 显式锁表必须在一个事务中进行，在事务外锁表会报错。
+* 显式锁表必须在事务中进行，在事务外锁表会报错。
 * `LOCK TABLE`只能获取表锁，默认会等待冲突的锁被释放。
 * 命令一旦获取到锁， 会被在当前事务中一直持有。没有`UNLOCK TABLE`，锁总是在事务结束时被释放。
 * 指定`NOWAIT`选项时，如果命令不能立刻获得锁就会中止并报错。
 * 指定`ONLY`选项，则继承于该表的子表不会自动加锁。
+
+###表级锁 
+
+| Rank | Lock       | Command | Comment |
+| ---------------------- | ------------ | ------------ | ------------ |
+| 1          | Access Share | SELECT | 只读锁，仅与写锁冲突 |
+| 2             | Row Share      | SELECT FOR UPDATE\|SHARE | 共享**意向锁** |
+| 3         | Row Exclusive | INSERT \| UPDATE \| DELETE | 排它**意向锁** |
+| 4 | Share Update Exclusive | VACUUM, ANALYZE, <br />CREATE INDEX CONCURRENTLY, ALTER TABLE* | 自斥的排它意向所 |
+| 5                 | Share | CREATE INDEX | 读锁，阻止数据变更 |
+| 6   | Share Row Exclusive | CREATE COLLATION\|TRIGGER , ALTER TABLE* | 阻止数据变更，且自斥 |
+| 7             | Exclusive      | REFRESH MATERIALIZED VIEW CONCURRENTLY | 排斥一切，只读除外 |
+| 8      | Access Exclusive | DROP TABLE, TRUNCATE, REINDEX, <br />CLUSTER, VACUUM FULL, REFRESH | 排斥一切 |
+
+如何记忆这么多类型的锁呢？让我们从演化的视角来看这些锁。
+
+最开始只有两种锁：`Share`与`Exclusive`，共享锁与排它锁，即所谓**读锁**与**写锁**。读锁的目的是阻止表数据的变更，而写锁的目的是阻止一切并发访问。这很好理解。
+
+| 请求 \ 持有 | SHARE | EXCLUSIVE |
+| ----------- | ----- | --------- |
+| SHARE       |       | x         |
+| EXCLUSIVE   | x     | x         |
+
+后来，随着多版本并发控制的出现，读写相互不阻塞了。读写锁都有了一个升级版本，即前面多加一个`ACCESS`。`ACCESS SHARE`是改良版读锁，即允许`ACCESS`的`SHARE`锁，这种锁意味着即使其他进程在并发修改数据也不会阻塞数据。当然有了升级版的读锁（更弱），也就会有升级版的写锁（更强）来阻止一切访问，即连`ACCESS`都要`EXCLUSIVE`的锁，这种锁会阻止一切访问，是最强的写锁。
+
+|   请求 \ 持有    | ACCESS SHARE | ==SHARE== | ==EXCLUSIVE== | ACCESS EXCLUSIVE |
+| :--------------: | :----------: | :-------: | :-----------: | :--------------: |
+|   ACCESS SHARE   |              |           |               |        x         |
+|    ==SHARE==     |              |           |       x       |        x         |
+|  ==EXCLUSIVE==   |              |     x     |       x       |        x         |
+| ACCESS EXCLUSIVE |      x       |     x     |       x       |        x         |
+
+引入MVCC后，原有的读写操作也被归类至新的锁下面。例如，普通的SELECT查询原来需要持有SHARE锁，现在就只需要持有不阻塞写的`ACCESS SHARE`锁，唯一需要持有阻塞版本读锁的也就只剩下创建索引（非并发）一种了（创建索引需要读取表，允许多个索引创建进程并发读取，非并发创建索引时不允许底层表数据发生变更）。而原来会获取`EXCLUSIVE`的操作，大多数提升至`ACCESS EXCLUSIVE`，原来的`EXCLUSIVE`锁只剩下并发刷新物化视图这一种情形了。刷新物化视图的过程中是不应该允许访问的，因为可能读取到计算到一半的中间结果，不过并发执行刷新操作可以允许在排它的同时允许只读旧数据，因此使用了更新后的`EXCLUSIVE`锁，仅允许只读访问。
+
+迄今，我们已经有了四种锁。
+
+
+
+（虽然实际上这应该是`AccessExclusive`）。
+
+
+
+
+
+#### 冲突矩阵
+
+| Reqested\Current       | ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE |
+| ---------------------- | ------------ | --------- | ------------- | ---------------------- | ----- | ------------------- | --------- | ---------------- |
+| ACCESS SHARE           |              |           |               |                        |       |                     |           | X                |
+| ROW SHARE              |              |           |               |                        |       |                     | X         | X                |
+| ROW EXCLUSIVE          |              |           |               |                        | X     | X                   | X         | X                |
+| SHARE UPDATE EXCLUSIVE |              |           |               | X                      | X     | X                   | X         | X                |
+| SHARE                  |              |           | X             | X                      |       | X                   | X         | X                |
+| SHARE ROW EXCLUSIVE    |              |           | X             | X                      | X     | X                   | X         | X                |
+| EXCLUSIVE              |              | X         | X             | X                      | X     | X                   | X         | X                |
+| ACCESS EXCLUSIVE       | X            | X         | X             | X                      | X     | X                   | X         | X                |
+
+### 命令冲突矩阵
+
+| Reqested\Current       | ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE |
+| ---------------------- | ------------ | --------- | ------------- | ---------------------- | ----- | ------------------- | --------- | ---------------- |
+| ACCESS SHARE           |              |           |               |                        |       |                     |           |                  |
+| ACCESS SHARE           |              |           |               |                        |       |                     |           | X                |
+| ROW SHARE              |              |           |               |                        |       |                     | X         | X                |
+| ROW EXCLUSIVE          |              |           |               |                        | X     | X                   | X         | X                |
+| SHARE UPDATE EXCLUSIVE |              |           |               | X                      | X     | X                   | X         | X                |
+| SHARE                  |              |           | X             | X                      |       | X                   | X         | X                |
+| SHARE ROW EXCLUSIVE    |              |           | X             | X                      | X     | X                   | X         | X                |
+| EXCLUSIVE              |              | X         | X             | X                      | X     | X                   | X         | X                |
+| ACCESS EXCLUSIVE       | X            | X         | X             | X                      | X     | X                   | X         | X                |
+
+
+
+
+
+
 
 ### 实践
 

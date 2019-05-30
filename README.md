@@ -152,7 +152,6 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 - [ ] 自动化后端：PostGraphQL, PgRest, PostgRest横向对比
 - [ ] PostGraphQL：解放前后端生产力
 - [ ] postgres_fdw应用：管理远程数据库
-- [ ] 逻辑解码：变更数据捕获CDC
 
 **SQL**
 
@@ -160,12 +159,15 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 - [ ] PostgreSQL数据类型 —— 文本类型
 - [ ] PostgreSQL数据类型 —— 文本字面值
 - [ ] PostgreSQL数据类型 —— 网络类型
+- [x] [PostgreSQL中的触发器](sql/trigger.md)
+- [x] [PostgreSQL中的锁](sql/lock.md)
+- [ ] PostgreSQL的LOCALE与本地化
 - [ ] PostgreSQL 12 JSON
 - [ ] PostgreSQL中的时间与时区
 - [ ] Sequence的方方面面
 - [ ] 常见索引类型及其应用场景
 - [ ] PostgreSQL中的JOIN
-- [ ] [PostgreSQL中的锁及其应用](sql/lock.md)
+- [ ] 
 - [ ] 子查询还是CTE？
 - [ ] LATERAL JOIN
 - [ ] DISTINCT ON子句与除重
@@ -194,7 +196,7 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 - [x] [PostgresSQL变更数据捕获](src/logical-decoding.md)
 - [x] [PostgreSQL前后端协议概述](src/wire-protocol.md)
 - [x] [PostgreSQL的逻辑结构与物理结构](src/logical-arch.md)
-- [ ] [事务隔离等级](src/isolation-level.md)
+- [x] [事务隔离等级](src/isolation-level.md)
 - [ ] 并发创建索引的实现方式（CREATE INDEX CONCURRENTLY）
 - [ ] GIN索引的实现原理
 - [ ] B树索引的原理与实现细节
@@ -282,7 +284,7 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
   - [Current](https://www.postgresql.org/docs/current/index.html) ([11](https://www.postgresql.org/docs/11/index.html)) / [10](https://www.postgresql.org/docs/10/index.html) / [9.6](https://www.postgresql.org/docs/9.6/index.html) / [9.5](https://www.postgresql.org/docs/9.5/index.html) / [9.4](https://www.postgresql.org/docs/9.4/index.html) / [12beta](https://www.postgresql.org/docs/devel/index.html)
 
 * [PostgreSQL 中文文档](http://www.postgres.cn/docs/11/)
-  * [Docs4Dev- PostgresQL 11](https://www.docs4dev.com/docs/zh/postgre-sql/11.2/reference/bookindex.html#指数)   /  [11](http://www.postgres.cn/docs/11/) / [10](http://www.postgres.cn/docs/10/)  / [9.6](http://www.postgres.cn/docs/9.6/)
+  * [11](http://www.postgres.cn/docs/11/) / [10](http://www.postgres.cn/docs/10/)  / [9.6](http://www.postgres.cn/docs/9.6/) / (Docs4Dev- PostgresQL 11](https://www.docs4dev.com/docs/zh/postgre-sql/11.2/reference/bookindex.html)
 * [PostgreSQL Commit Fest](https://commitfest.postgresql.org)
 
 - [PostGIS 2.5 Documentation](https://postgis.net/docs/manual-2.5/)
