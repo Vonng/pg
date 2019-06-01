@@ -105,74 +105,75 @@ func main() {
 package main
 
 import (
-	"fmt"
+	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/pgproto3"
 )
 
-func GetFrontend(address string) *pgproto3.Frontend {
-	conn, _ := (&net.Dialer{KeepAlive: 5 * time.Minute}).Dial("tcp4", address)
-	frontend, _ := pgproto3.NewFrontend(conn, conn)
-	return frontend
+type ProxyServer struct {
+	UpstreamAddr string
+	ListenAddr   string
+	Listener     net.Listener
+	Dialer       net.Dialer
 }
 
-func GetBackend(address string) *pgproto3.Backend {
-	ln, _ := net.Listen("tcp4", address)
-	conn, _ := ln.Accept()
-	backend, _ := pgproto3.NewBackend(conn, conn)
-	return backend
+func NewProxyServer(listenAddr, upstreamAddr string) *ProxyServer {
+	ln, _ := net.Listen(`tcp4`, listenAddr)
+	return &ProxyServer{
+		ListenAddr:   listenAddr,
+		UpstreamAddr: upstreamAddr,
+		Listener:     ln,
+		Dialer:       net.Dialer{KeepAlive: 1 * time.Minute},
+	}
+}
+
+func (ps *ProxyServer) Serve() error {
+	for {
+		conn, err := ps.Listener.Accept()
+		if err != nil {
+			panic(err)
+		}
+		go ps.ServeOne(conn)
+	}
+}
+
+func (ps *ProxyServer) ServeOne(clientConn net.Conn) error {
+	backend, _ := pgproto3.NewBackend(clientConn, clientConn)
+	startupMsg, err := backend.ReceiveStartupMessage()
+	if err != nil && strings.Contains(err.Error(), "ssl") {
+		if _, err := clientConn.Write([]byte(`N`)); err != nil {
+			panic(err)
+		}
+		// ssl is not welcome, now receive real startup msg
+		startupMsg, err = backend.ReceiveStartupMessage()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	serverConn, _ := ps.Dialer.Dial(`tcp4`, ps.UpstreamAddr)
+	frontend, _ := pgproto3.NewFrontend(serverConn, serverConn)
+	frontend.Send(startupMsg)
+
+	errChan := make(chan error, 2)
+	go func() {
+		_, err := io.Copy(clientConn, serverConn)
+		errChan <- err
+	}()
+	go func() {
+		_, err := io.Copy(serverConn, clientConn)
+		errChan <- err
+	}()
+
+	return <-errChan
 }
 
 func main() {
-	frontend := GetFrontend("127.0.0.1:5432")
-	backend := GetBackend("127.0.0.1:5433")
-
-	// fmt.Println(startupMsg.ProtocolVersion)
-	// fmt.Println(startupMsg.Parameters)
-
-	startupMsg, _ := backend.ReceiveStartupMessage()
-	fmt.Printf("[F2B] %T %v\n", startupMsg, startupMsg)
-	startupMsg = &pgproto3.StartupMessage{
-		ProtocolVersion: pgproto3.ProtocolVersionNumber,
-		Parameters:      startupMsg.Parameters,
-	}
-	frontend.Send(startupMsg)
-
-	// Client Conn to Server Conn
-	go func() {
-		for {
-			msg, err := backend.Receive()
-			if err != nil {
-				fmt.Println(err.Error())
-			}
-			fmt.Printf("[F2B] %T %v\n", msg, msg)
-			err = frontend.Send(msg)
-			if err != nil {
-				fmt.Println("[F2B] fail", err.Error())
-			}
-		}
-	}()
-
-	// Server Conn to Client Conn
-	go func() {
-		for {
-			for {
-				msg, err := frontend.Receive()
-				if err != nil {
-					fmt.Println(err.Error())
-				}
-				fmt.Printf("[B2F] %T %v\n", msg, msg)
-				backend.Send(msg)
-				if err != nil {
-					fmt.Println("[B2F] fail", err.Error())
-				}
-			}
-		}
-	}()
-
-	<-make(chan bool)
+	proxy := NewProxyServer("127.0.0.1:5433", "127.0.0.1:5432")
+	proxy.Serve()
 }
 
 ```
