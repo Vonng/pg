@@ -9,8 +9,8 @@ Vagrant.configure("2") do |config|
             v.customize [
                 "modifyvm", :id,
                 "--name", primary.vm.hostname,
-                "--memory", 1024,
-                "--cpus", "1",
+                "--memory", 2048,
+                "--cpus", "2",
                 "--ioapic", "on",
                 "--rtcuseutc", "on",
                 "--vtxvpid", "on",
@@ -40,7 +40,7 @@ Vagrant.configure("2") do |config|
             v.customize [
                 "modifyvm", :id,
                 "--name", standby.vm.hostname,
-                "--memory", 1024,
+                "--memory", 2048,
                 "--cpus", "1",
                 "--ioapic", "on",
                 "--rtcuseutc", "on",
@@ -70,7 +70,7 @@ Vagrant.configure("2") do |config|
             v.customize [
                 "modifyvm", :id,
                 "--name", offline.vm.hostname,
-                "--memory", 1024,
+                "--memory", 2048,
                 "--cpus", "1",
                 "--ioapic", "on",
                 "--rtcuseutc", "on",

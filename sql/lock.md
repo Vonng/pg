@@ -1,551 +1,277 @@
 ---
-description: "PostgreSQL中锁的类型，加锁的方法"
-categories: ["Dev"]
+description: "PostgreSQL中的锁"
+categories: ["PG"]
 tags: ["PostgreSQL","SQL", "Lock"]
 type: "post"
 ---
 
-# PostgreSQL的锁
+# PostgreSQL锁
 
-PostgreSQL有好几类锁，其中最主要的是**表级锁**与**行级锁**，此外还有页级锁，咨询锁等。。
+PostgreSQL的并发控制以**快照隔离（SI）**为主，以**两阶段锁定（2PL）**机制为辅。PostgreSQL对DML（`SELECT, UPDATE, INSERT, DELETE`等命令）使用SSI，对DDL（`CREATE TABLE`等命令）使用2PL。
 
-**表级锁**是由各种命令自动加上的，行级锁是`SELECT FOR UPDATE|SHARE`语句自动加上的。执行数据库操作时，都是先获取表级锁，再获取行级锁。表级锁可以在事务中通过`LOCK`命令显式获取，行级锁由`SELECT`命令显式控制的。
+PostgreSQL有好几类锁，其中最主要的是**表级锁**与**行级锁**，此外还有页级锁，咨询锁等，**表级锁**通常是各种命令执行时自动获取的，或者通过事务中的`LOCK`语句显式获取；而行级锁则是由`SELECT FOR UPDATE|SHARE`语句显式获取的。执行数据库命令时，都是先获取表级锁，再获取行级锁。本文主要介绍PostgreSQL中的表锁。
+
+
+
+## 表级锁
+
+* **表级锁**通常会在执行各种命令执行时自动获取，或者通过在事务中使用`LOCK`语句显式获取。
+* 每种锁都有自己的**冲突集合**，在同一时刻的同一张表上，两个事务可以持有不冲突的锁，不能持有冲突的锁。
+* 有些锁是**自斥(self-conflict)**的，即最多只能被一个事务所持有。
+* 表级锁总共有八种模式，有着并不严格的强度递增关系（例外是`Share`锁不自斥）
+* 表级锁存在于PG的共享内存中，可以通过`pg_locks`系统视图查阅。
+
+### 表级锁的模式
+
+![](../img/table-lock-mode.png)
+
+如何记忆这么多类型的锁呢？让我们从演化的视角来看这些锁。
+
+### 表级锁的演化
+
+![](../img/lock-envolve.png)
+
+最开始只有两种锁：`Share`与`Exclusive`，共享锁与排它锁，即所谓**读锁**与**写锁**。读锁的目的是阻止表数据的变更，而写锁的目的是阻止一切并发访问。这很好理解。
+
+#### 多版本并发控制
+
+后来随着多版本并发控制技术的出现（PostgreSQL使用快照隔离实现MVCC），读不阻塞写，写不阻塞读（针对表的增删改查而言）。因而原有的锁模型就需要升级了：这里的共享锁与排他锁都有了一个升级版本，即前面多加一个`ACCESS`。`ACCESS SHARE`是改良版共享锁，即允许`ACCESS`（多版本并发访问）的`SHARE`锁，这种锁意味着即使其他进程正在并发修改数据也不会阻塞本进程读取数据。当然有了多版本读锁也就会有对应的多版本写锁来阻止一切访问，即连`ACCESS`（多版本并发访问）都要`EXCLUSIVE`的锁，这种锁会阻止一切访问，是最强的写锁。
+
+引入MVCC后，`INSERT|UPDATE|DELETE`仍然使用原来的`Exclusive`锁，而普通的只读`SELECT`则使用多版本的`AccessShare`锁。因为`AccessShare`锁与原来的`Exclusive`锁不冲突，所以读写之间就不会阻塞了。原来的`Share`锁现在主要的应用场景为创建索引（非并发创建模式下，创建索引会阻止任何对底层数据的变更），而升级的多版本`AccessExclusive`锁主要用于除了增删改之外的排他性变更（`DROP|TRUNCATE|REINDEX|VACUUM FULL`等），这个模型如图（a）所示。
+
+当然，这样还是有问题的。虽然在MVCC中读写之间相互不阻塞了，但写-写之间还是会产生冲突。上面的模型中，并发写入是通过表级别的`Exclusive`锁解决的。表级锁虽然可以解决并发写入冲突问题，但这个粒度太大了，会影响并发度：因为同一时刻一张表上只能有一个进程持有`Exclusive`锁并执行写入，而典型的OLTP场景是以单行写入为主。所以常见的DBMS解决写-写冲突通常都是采用**行级锁**来实现（下面会讲到）。
+
+行级锁和表级锁不是一回事，但这两种锁之间仍然存在着联系，协调这两种锁之间的关系，就需要引入**意向锁**。
+
+#### 意向锁
+
+意向锁用于协调表锁与行锁之间的关系：它用于保护较低资源级别上的锁，即说明下层节点已经被加了锁。当进程想要锁定或修改某表上的某一行时，它会在这一行上加上行级锁。但在加行级锁之前，它还需要在这张表上加上一把意向锁，表示自己将会在表中的若干行上加锁。
+
+举个例子，假设不存在意向锁。假设进程A获取了表上某行的行锁，持有行上的排他锁意味着进程A可以对这一行执行写入；同时因为不存在意向锁，进程B很顺利地获取了该表上的表级排他锁，这意味着进程B可以对整个表，包括A锁定对那一行进行修改，这就违背了常识逻辑。因此A需要在获取行锁前先获取表上的意向锁，这样后来的B就意识到自己无法获取整个表上的排他锁了（但B依然可以加一个意向锁，获取其他行上的行锁）。
+
+因此，这里`RowShare`就是行级共享锁对应的表级意向锁（`SELECT FOR SHARE|UPDATE`命令获取），而`RowExclusive`（`INSERT|UPDATE|DELETE`获取）则是行级排他锁对应的表级意向锁。注意因为MVCC的存在，只读查询并不会在行上加锁。引入意向锁后的模型如图（c）所示。而合并MVCC与意向锁模型之后的锁模型如图（d）所示。
+
+#### 自斥锁
+
+上面这个模型已经相当不错，但仍然存在一些问题，譬如自斥：这里`RowExclusive`与`Share`锁都不是自斥的。
+
+举个例子，并发VACUUM不应阻塞数据写入，而且一个表上不应该允许多个VACUUM进程同时工作。因为不能阻塞写入，因此VACUUM所需的锁强度必须要比Share锁弱，弱于Share的最强锁为`RowExclusive`，不幸的是，该锁并不自斥。如果VACUUM使用该锁，就无法阻止单表上出现多个VACUUM进程。因此需要引入一个自斥版本的`RowExclusive`锁，即`ShareUpdateExclusive`锁。
+
+同理，再比如执行触发器管理操作（创建，删除，启用）时，该操作不应阻塞读取和锁定，但必须禁止一切实际的数据写入，否则就难以判断某条元组的变更是否应该触发触发器。Share锁满足不阻塞读取和锁定的条件，但并不自斥，因此可能出现多个进程在同一个表上并发修改触发器。并发修改触发器会带来很多问题（譬如丢失更新，A将其配置为Replica Trigger，B将其配置为Always Trigger，都反回成功了，以谁为准？）。因此这里也需要一个自斥版本的`Share`锁，即`ShareRowExclusive`锁。
+
+因此，引入两种自斥版本的锁后，就是PostgreSQL中的最终表级锁模型，如图（e）所示。
+
+### 表级锁的命名与记忆
+
+PostgreSQL的表级锁的命名有些诘屈聱牙，这是因为一些历史因素，但也可以总结出一些规律便于记忆。
+
+- 最初只有两种锁：共享锁（`Share`）与排他锁（`Exclusive`）。
+  - 特征是只有一个单词，表示这是两种最基本的锁：读锁与写锁。
+- 多版本并发控制的出现，引入了多版本的共享锁与排他锁（`AccessShare`与`AccessExclusive`）。
+  - 特征是`Access`前缀，表示这是用于"多版本并发控制"的改良锁。
+- 为了处理并发写入之间的冲突，又引入了两种意向锁（`RowShare`与`RowExclusive`）
+  - 特征是`Row`前缀，表示这是行级别共享/排他锁对应的表级意向锁。
+- 最后，为了处理意向排他锁与共享锁不自斥的问题，引入了这两种锁的自斥版本（`ShareUpdateExclusive`, `ShareRowExclusive`）。这两种锁的名称比较难记：
+  - 都是以`Share`打头，以`Exclusive`结尾。表示这两种锁都是某种共享锁的自斥版本。
+  - 两种锁强度围绕在`Share`前后，`Update`弱于`Share`，`Row`强于`Share`。
+  - `ShareRowExclusive`可以理解为`Share` + `Row Exclusive`，因为`Share`不排斥其他`Share`，但`RowExclusive`排斥`Share`，因此同时加这两种锁的结果等效于`ShareRowExclusive`，即SIX。
+  - `ShareUpdateExclusive`可以理解为`ShareUpdate` + `Exclusive`：`UPDATE`操作持有`RowExclusive`锁，而`ShareUpdate`指的是本锁与普通的增删改（持`RowExclusive`锁）相容，而`Exclusive`则表示自己和自己不相容。
+- `Share`, `ShareRowUpdate`, `Exclusive` 这三种锁极少出现，基本可以无视。所以实际上主要用到的锁是：
+  - 多版本两种：`AccessShare`, `AccessExclusive`
+  - 意向锁两种：`RowShare`,`RowExclusive`
+  - 自斥意向锁一种：`ShareUpdateExclusive`
 
 
 
 ## 显式加锁
 
-通常，表级锁会在相应命令执行中自动获取，但也可以手动显式获取。使用LOCK命令加锁的方式：
+通常表级锁会在相应命令执行中自动获取，但也可以手动显式获取。使用LOCK命令加锁的方式：
 
 ```sql
 LOCK [ TABLE ] [ ONLY ] name [ * ] [, ...] [ IN lockmode MODE ] [ NOWAIT ]
 ```
 
-* 显式锁表必须在事务中进行，在事务外锁表会报错。
-* `LOCK TABLE`只能获取表锁，默认会等待冲突的锁被释放。
-* 命令一旦获取到锁， 会被在当前事务中一直持有。没有`UNLOCK TABLE`，锁总是在事务结束时被释放。
-* 指定`NOWAIT`选项时，如果命令不能立刻获得锁就会中止并报错。
-* 指定`ONLY`选项，则继承于该表的子表不会自动加锁。
+- 显式锁表必须在事务中进行，在事务外锁表会报错。
+- 锁定视图时，视图定义中所有出现的表都会被锁定。
+- 使用表继承时，默认父表和所有后代表都会加锁，指定`ONLY`选项则继承于该表的子表不会自动加锁。
+- 锁表或者锁视图需要对应的权限，例如`AccessShare`锁需要`SELECT`权限。
+- 默认获取的锁模式为`AccessExclusive`，即最强的锁。
+- `LOCK TABLE`只能获取表锁，默认会等待冲突的锁被释放，指定`NOWAIT`选项时，如果命令不能立刻获得锁就会中止并报错。
+- 命令一旦获取到锁， 会被在当前事务中一直持有。没有`UNLOCK TABLE`命令，锁总是在事务结束时释放。
 
-###表级锁 
+### 例子：数据迁移
 
-| Rank | Lock       | Command | Comment |
-| ---------------------- | ------------ | ------------ | ------------ |
-| 1          | Access Share | SELECT | 只读锁，仅与写锁冲突 |
-| 2             | Row Share      | SELECT FOR UPDATE\|SHARE | 共享**意向锁** |
-| 3         | Row Exclusive | INSERT \| UPDATE \| DELETE | 排它**意向锁** |
-| 4 | Share Update Exclusive | VACUUM, ANALYZE, <br />CREATE INDEX CONCURRENTLY, ALTER TABLE* | 自斥的排它意向所 |
-| 5                 | Share | CREATE INDEX | 读锁，阻止数据变更 |
-| 6   | Share Row Exclusive | CREATE COLLATION\|TRIGGER , ALTER TABLE* | 阻止数据变更，且自斥 |
-| 7             | Exclusive      | REFRESH MATERIALIZED VIEW CONCURRENTLY | 排斥一切，只读除外 |
-| 8      | Access Exclusive | DROP TABLE, TRUNCATE, REINDEX, <br />CLUSTER, VACUUM FULL, REFRESH | 排斥一切 |
-
-如何记忆这么多类型的锁呢？让我们从演化的视角来看这些锁。
-
-最开始只有两种锁：`Share`与`Exclusive`，共享锁与排它锁，即所谓**读锁**与**写锁**。读锁的目的是阻止表数据的变更，而写锁的目的是阻止一切并发访问。这很好理解。
-
-| 请求 \ 持有 | SHARE | EXCLUSIVE |
-| ----------- | ----- | --------- |
-| SHARE       |       | x         |
-| EXCLUSIVE   | x     | x         |
-
-后来，随着多版本并发控制的出现，读写相互不阻塞了。读写锁都有了一个升级版本，即前面多加一个`ACCESS`。`ACCESS SHARE`是改良版读锁，即允许`ACCESS`的`SHARE`锁，这种锁意味着即使其他进程在并发修改数据也不会阻塞数据。当然有了升级版的读锁（更弱），也就会有升级版的写锁（更强）来阻止一切访问，即连`ACCESS`都要`EXCLUSIVE`的锁，这种锁会阻止一切访问，是最强的写锁。
-
-|   请求 \ 持有    | ACCESS SHARE | ==SHARE== | ==EXCLUSIVE== | ACCESS EXCLUSIVE |
-| :--------------: | :----------: | :-------: | :-----------: | :--------------: |
-|   ACCESS SHARE   |              |           |               |        x         |
-|    ==SHARE==     |              |           |       x       |        x         |
-|  ==EXCLUSIVE==   |              |     x     |       x       |        x         |
-| ACCESS EXCLUSIVE |      x       |     x     |       x       |        x         |
-
-引入MVCC后，原有的读写操作也被归类至新的锁下面。例如，普通的SELECT查询原来需要持有SHARE锁，现在就只需要持有不阻塞写的`ACCESS SHARE`锁，唯一需要持有阻塞版本读锁的也就只剩下创建索引（非并发）一种了（创建索引需要读取表，允许多个索引创建进程并发读取，非并发创建索引时不允许底层表数据发生变更）。而原来会获取`EXCLUSIVE`的操作，大多数提升至`ACCESS EXCLUSIVE`，原来的`EXCLUSIVE`锁只剩下并发刷新物化视图这一种情形了。刷新物化视图的过程中是不应该允许访问的，因为可能读取到计算到一半的中间结果，不过并发执行刷新操作可以允许在排它的同时允许只读旧数据，因此使用了更新后的`EXCLUSIVE`锁，仅允许只读访问。
-
-迄今，我们已经有了四种锁。
-
-
-
-（虽然实际上这应该是`AccessExclusive`）。
-
-
-
-
-
-#### 冲突矩阵
-
-| Reqested\Current       | ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE |
-| ---------------------- | ------------ | --------- | ------------- | ---------------------- | ----- | ------------------- | --------- | ---------------- |
-| ACCESS SHARE           |              |           |               |                        |       |                     |           | X                |
-| ROW SHARE              |              |           |               |                        |       |                     | X         | X                |
-| ROW EXCLUSIVE          |              |           |               |                        | X     | X                   | X         | X                |
-| SHARE UPDATE EXCLUSIVE |              |           |               | X                      | X     | X                   | X         | X                |
-| SHARE                  |              |           | X             | X                      |       | X                   | X         | X                |
-| SHARE ROW EXCLUSIVE    |              |           | X             | X                      | X     | X                   | X         | X                |
-| EXCLUSIVE              |              | X         | X             | X                      | X     | X                   | X         | X                |
-| ACCESS EXCLUSIVE       | X            | X         | X             | X                      | X     | X                   | X         | X                |
-
-### 命令冲突矩阵
-
-| Reqested\Current       | ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE |
-| ---------------------- | ------------ | --------- | ------------- | ---------------------- | ----- | ------------------- | --------- | ---------------- |
-| ACCESS SHARE           |              |           |               |                        |       |                     |           |                  |
-| ACCESS SHARE           |              |           |               |                        |       |                     |           | X                |
-| ROW SHARE              |              |           |               |                        |       |                     | X         | X                |
-| ROW EXCLUSIVE          |              |           |               |                        | X     | X                   | X         | X                |
-| SHARE UPDATE EXCLUSIVE |              |           |               | X                      | X     | X                   | X         | X                |
-| SHARE                  |              |           | X             | X                      |       | X                   | X         | X                |
-| SHARE ROW EXCLUSIVE    |              |           | X             | X                      | X     | X                   | X         | X                |
-| EXCLUSIVE              |              | X         | X             | X                      | X     | X                   | X         | X                |
-| ACCESS EXCLUSIVE       | X            | X         | X             | X                      | X     | X                   | X         | X                |
-
-
-
-
-
-
-
-### 实践
-
-例如，在迁移数据时，希望在dump和restore的期间，禁止对表的写入，此时可以使用Exclusive显式锁表。
+举个例子，以迁移数据为例，假设希望将某张表的数据迁移到另一个实例中。并保证在此期间旧表上的数据在迁移期间不发生变化，那么我们可以做的就是在复制数据前在表上显式加锁，并在复制结束，应用开始写入新表后释放。应用仍然可以从旧表上读取数据，但不允许写入。那么根据锁冲突矩阵，允许只读查询的锁要弱于`AccessExclusive`，阻止写入的锁不能弱于`ShareRowExclusive`，因此可以选择`ShareRowExclusive`或`Exclusive锁`。因为拒绝写入意味着锁定没有任何意义，所以这里选择更强的`Exclusive`锁。
 
 ```sql
 BEGIN;
-LOCK TABLE messages IN EXCLUSIVE MODE;
+LOCK TABLE tbl IN EXCLUSIVE MODE;
 -- DO Something
 COMMIT
 ```
 
-如果不是使用`sql`而是使用`pg_dump`时，可以采用曲线救国的方式，开启后台进程来锁表。如下例所示：
 
-```bash
-function lock_message(){
-    declare -i partition_idx=$1
-    pgurl=$(get_src_url)
-    pipe=/tmp/mpl${partition_idx}
-    catpid=/tmp/mplpid${partition_idx}
 
-    mkfifo ${pipe}
-    cat > ${pipe} &
-    echo $! > ${catpid}
-    cat ${pipe} | psql ${pgurl} &
-    lock_statement="BEGIN;LOCK TABLE rel_8192_${partition_idx}.messages IN EXCLUSIVE MODE;"
-    echo $lock_statement > ${pipe}
-}
 
 
-function unlock_message(){
-    declare -i partition_idx=$1
-    pipe=/tmp/mpl${partition_idx}
-    catpid=/tmp/mplpid${partition_idx}
-    
-    echo "ROLLBACK;\q" > ${pipe}
-    cat ${catpid} | xargs kill
-    rm -rf ${pipe} ${catpid}
-    ps aux |  grep "cat\ /tmp*" | grep -v "grep" | awk '{print $2}' | xargs kill
-    echo "UNLOCK rel_8192_${partition_idx}.message"
-}
 
 
-function handle_message(){
-    lock_message ${partition_idx}
-    psql ${dst_url} -c "TRUNCATE messages;"
-    pg_dump ${src_url} -a -t messages | psql ${dst_url}
-    unlock_message ${partition_idx}
-}
-```
 
-在为引用表的命令自动获取锁时， PostgreSQL总是尽可能使用最不严格的 锁模式。提供`LOCK TABLE`是用于想要更严格 的锁定的情况。例如，假设一个应用运行一个`READ COMMITTED` 隔离级别的事务， 并且需要确保一个表中的数据在该事务的期间保持稳定。要实现这个目的， 必须在查询之前在表上获得`SHARE`锁模式。这将阻止并发的 数据更改并且确保该表的后续读操作会看到已提交数据的一个稳定视图， 因为`SHARE`锁模式与写入者所要求的 `ROW EXCLUSIVE`锁有冲突，并且你的 `LOCK TABLE *name* IN SHARE MODE` 语句将等待，直到任何并发持有`ROW EXCLUSIVE`模式锁的持有者提交或者回滚。因此，一旦得到锁， 就不会有未提交的写入还没有解决。更进一步，在释放该锁之前，任何 人都不能开始。
 
-要在运行在`REPEATABLE READ`或`SERIALIZABLE` 隔离级别的事务中得到类似的效果，你必须在执行任何 `SELECT`或者数据修改语句之前执行 `LOCK TABLE`语句。一个 `REPEATABLE READ`或者`SERIALIZABLE`事务的 数据视图将在它的第一个`SELECT`或者数据修改语句开始 时被冻结。在该事务中稍后的一个`LOCK TABLE`仍将阻止并发写 — 但它不会确保该事务读到的东西对应于最新的已提交值。
+## 锁的查询
 
-如果一个此类事务正要修改表中的数据，那么它应该使用 `SHARE ROW EXCLUSIVE`锁模式来取代 `SHARE`模式。这会保证一次只有一个此类事务运行。如果 不用这种模式，死锁就可能出现：两个事务可能都要求 `SHARE`模式，并且都不能获得 `ROW EXCLUSIVE`模式来真正地执行它们的更新（注意一个 事务所拥有的锁不会冲突，因此一个事务可以在它持有`SHARE` 模式时获得`ROW EXCLUSIVE`模式 — 但是如果有其他 人持有`SHARE`模式时则不能）。为了避免死锁，确保所有的 事务在同样的对象上以相同的顺序获得锁，并且如果在一个对象上涉及多 种锁模式，事务应该总是首先获得最严格的那种模式。
+PostgreSQL提供了一个系统视图[`pg_locks`](http://www.postgres.cn/docs/11/view-pg-locks.html)，包含了当前活动进程持锁的信息。可以锁定的对象包括：关系，页面，元组，事务标识（虚拟的或真实的），其他数据库对象（带有OID）。
 
-
-
-## 参数
-
-- `*name*`
-
-  要锁定的一个现有表的名称（可以是模式限定的）。如果在表名前指定了 `ONLY`，只有该表会被锁定。如果没有指定了 `ONLY`，该表和它所有的后代表（如果有）都会被锁定。可选 地，在表名后指定`*`来显式地表示把后代表包括在内。命令`LOCK TABLE a, b;`等效于 `LOCK TABLE a; LOCK TABLE b;`。这些表会被按照在 `LOCK TABLE`中指定的顺序一个一个 被锁定。
-
-- `*lockmode*`
-
-  锁模式指定这个锁和哪些锁冲突。锁模式在 [第 13.3 节](http://www.postgres.cn/docs/9.6/explicit-locking.html)中描述。如果没有指定锁模式，那儿将使用最严格的模式`ACCESS EXCLUSIVE`。
-
-- `NOWAIT`
-
-  指定`LOCK TABLE`不等待任何冲突锁被释放： 如果所指定的锁不能立即获得，那么事务就会中止。
-
-## 注解
-
-`LOCK TABLE ... IN ACCESS SHARE MODE`要求目标表上的 `SELECT`特权。`LOCK TABLE ... IN ROW EXCLUSIVE MODE`要求目标表上的`INSERT`、`UPDATE`、 `DELETE`或`TRUNCATE`特权。所有其他形式的 `LOCK`要求表级`UPDATE`、`DELETE`或`TRUNCATE`特权。
-
-`LOCK TABLE`在一个事务块外部没有用处：锁将只保持到语句 完成。因此如果在一个事务块外部使用了`LOCK`， PostgreSQL会报告一个错误。使用 [BEGIN](http://www.postgres.cn/docs/9.6/sql-begin.html)和[COMMIT](http://www.postgres.cn/docs/9.6/sql-commit.html)（或者 [ROLLBACK](http://www.postgres.cn/docs/9.6/sql-rollback.html)）定义一个事务块。
-
-`LOCK TABLE`只处理表级锁，因此涉及到 `ROW`的模式名称在这里都是不当的。这些模式名称应该通常 被解读为用户在被锁定表中获取行级锁的意向。还有， `ROW EXCLUSIVE`模式是一个可共享的表锁。记住就 `LOCK TABLE`而言，所有的锁模式都具有相同的语义， 只有模式的冲突规则有所不同。关于如何获取一个真正的行级锁的信息， 请见`SELECT`参考文档中的 [第 13.3.2 节](http://www.postgres.cn/docs/9.6/explicit-locking.html#LOCKING-ROWS)和[*锁定子句*](http://www.postgres.cn/docs/9.6/sql-select.html#SQL-FOR-UPDATE-SHARE)。
-
-## 示例
-
-在将要向一个外键表中执行插入时在主键表上获得一个 `SHARE`锁：
-
-```
-BEGIN WORK;
-LOCK TABLE films IN SHARE MODE;
-SELECT id FROM films
-    WHERE name = 'Star Wars: Episode I - The Phantom Menace';
--- 如果记录没有被返回就做 ROLLBACK
-INSERT INTO films_user_comments VALUES
-    (_id_, 'GREAT! I was waiting for it for so long!');
-COMMIT WORK;
-```
-
-在将要执行一次删除操作前在主键表上取一个 `SHARE ROW EXCLUSIVE`锁：
-
-```
-BEGIN WORK;
-LOCK TABLE films IN SHARE ROW EXCLUSIVE MODE;
-DELETE FROM films_user_comments WHERE id IN
-    (SELECT id FROM films WHERE rating < 5);
-DELETE FROM films WHERE rating < 5;
-COMMIT WORK;
-```
-
-## 兼容性
-
-在 SQL 标准中没有`LOCK TABLE`，SQL 标准中使用 `SET TRANSACTION`指定事务上的并发层次。 PostgreSQL也支持这样做，详见 [SET TRANSACTION](http://www.postgres.cn/docs/9.6/sql-set-transaction.html)。
-
-
-
-
-
-
-
-## 锁的种类：表、行、页
-
-​	PostgreSQL提供了多种锁模式用于控制对表中数据的并发访问。 这些模式可以用于在MVCC无法给出期望行为的情境中由应用控制的锁。 同样，大多数PostgreSQL命令会自动要求恰当的锁以保证被引用的表在命令的执行过程中 不会以一种不兼容的方式删除或修改（例如，`TRUNCATE`无法安全地与同一表中上的其他操作并发地执行，因此它在表上获得一个排他锁来强制这种行为）。
-
-要检查在一个数据库服务器中当前未解除的锁列表，可以使用[`pg_locks`](http://www.postgres.cn/docs/9.6/view-pg-locks.html)系统视图。 有关监控锁管理器子系统状态的更多信息，请参考[第 28 章](http://www.postgres.cn/docs/9.6/monitoring.html)。
-
-
-
-### 表锁
-
-下面的列表显示了可用的锁模式和PostgreSQL自动使用它们的场合。 你也可以用[LOCK](http://www.postgres.cn/docs/9.6/sql-lock.html)命令显式获得这些锁。请记住所有这些锁模式都是表级锁，即使它们的名字包含"row"单词（这些名称是历史遗产）。 在一定程度上，这些名字反应了每种锁模式的典型用法 — 但是语意却都是一样的。 两种锁模式之间真正的区别是它们有着不同的冲突锁模式集合（参考[表 13-2](http://www.postgres.cn/docs/9.6/explicit-locking.html#TABLE-LOCK-COMPATIBILITY)）。 两个事务在同一时刻不能在同一个表上持有属于相互冲突模式的锁（但是，一个事务决不会和自身冲突。例如，它可以在同一个表上获得`ACCESS EXCLUSIVE`锁然后接着获取`ACCESS SHARE`锁）。非冲突锁模式可以由许多事务同时持有。 请特别注意有些锁模式是自冲突的（例如，在一个时刻`ACCESS EXCLUSIVE`锁不能被多于一个事务持有)而其他锁模式不是自冲突的（例如，`ACCESS SHARE`锁可以被多个事务持有)。
-
-**表级锁模式**
-
-- `ACCESS SHARE`
-
-  只与`ACCESS EXCLUSIVE`锁模式冲突。`SELECT`命令在被引用的表上获得一个这种模式的锁。通常，任何只*读取*表而不修改它的查询都将获得这种锁模式。
-
-- `ROW SHARE`
-
-  与`EXCLUSIVE`和`ACCESS EXCLUSIVE`锁模式冲突。`SELECT FOR UPDATE`和`SELECT FOR SHARE`命令在目标表上取得一个这种模式的锁 （加上在被引用但没有选择`FOR UPDATE/FOR SHARE`的任何其他表上的`ACCESS SHARE`锁）。
-
-- `ROW EXCLUSIVE`
-
-  与`SHARE`、`SHARE ROW EXCLUSIVE`、`EXCLUSIVE`和`ACCESS EXCLUSIVE`锁模式冲突。命令`UPDATE`、`DELETE`和`INSERT`在目标表上取得这种锁模式（加上在任何其他被引用表上的`ACCESS SHARE`锁）。通常，这种锁模式将被任何*修改表中数据*的命令取得。
-
-- `SHARE UPDATE EXCLUSIVE`
-
-  与`SHARE UPDATE EXCLUSIVE`、`SHARE`、`SHARE ROW EXCLUSIVE`、`EXCLUSIVE`和`ACCESS EXCLUSIVE`锁模式冲突。这种模式保护一个表不受并发模式改变和`VACUUM`运行的影响。由`VACUUM`（不带`FULL`）、`ANALYZE`、`CREATE INDEX CONCURRENTLY`和`ALTER TABLE VALIDATE`以及其他`ALTER TABLE`的变体获得。
-
-- `SHARE`
-
-  与`ROW EXCLUSIVE`、`SHARE UPDATE EXCLUSIVE`、`SHARE ROW EXCLUSIVE`、`EXCLUSIVE`和`ACCESS EXCLUSIVE`锁模式冲突。这种模式保护一个表不受并发数据改变的影响。由`CREATE INDEX`（不带`CONCURRENTLY`）取得。
-
-- `SHARE ROW EXCLUSIVE`
-
-  与`ROW EXCLUSIVE`、`SHARE UPDATE EXCLUSIVE`、`SHARE`、`SHARE ROW EXCLUSIVE`、`EXCLUSIVE`和`ACCESS EXCLUSIVE`锁模式冲突。这种模式保护一个表不受并发数据修改所影响，并且是自排他的，这样在一个时刻只能有一个会话持有它。由`CREATE TRIGGER`和很多 `ALTER TABLE`的很多形式所获得（见 [ALTER TABLE](http://www.postgres.cn/docs/9.6/sql-altertable.html)）。
-
-- `EXCLUSIVE`
-
-  与`ROW SHARE`、`ROW EXCLUSIVE`、`SHARE UPDATE EXCLUSIVE`、`SHARE`、`SHARE ROW EXCLUSIVE`、`EXCLUSIVE`和`ACCESS EXCLUSIVE`锁模式冲突。这种模式只允许并发的`ACCESS SHARE`锁，即只有来自于表的读操作可以与一个持有该锁模式的事务并行处理。由`REFRESH MATERIALIZED VIEW CONCURRENTLY`获得。
-
-- `ACCESS EXCLUSIVE`
-
-  与所有模式的锁冲突（`ACCESS SHARE`、`ROW SHARE`、`ROW EXCLUSIVE`、`SHARE UPDATE EXCLUSIVE`、`SHARE`、`SHARE ROW EXCLUSIVE`、`EXCLUSIVE`和`ACCESS EXCLUSIVE`）。这种模式保证持有者是访问该表的唯一事务。由`ALTER TABLE`、`DROP TABLE`、`TRUNCATE`、`REINDEX`、`CLUSTER`、`VACUUM FULL`和`REFRESH MATERIALIZED VIEW`（不带`CONCURRENTLY`）命令获取。`ALTER TABLE`的很多形式也在这个层面上获得锁（见[ALTER TABLE](http://www.postgres.cn/docs/9.6/sql-altertable.html)）。这也是未显式指定模式的`LOCK TABLE`命令的默认锁模式。
-
-> **提示: **只有一个`ACCESS EXCLUSIVE`锁阻塞一个`SELECT`（不带`FOR UPDATE/SHARE`）语句。
-
-一旦被获取，一个锁通常将被持有直到事务结束。 但是如果在建立保存点之后才获得锁，那么在回滚到这个保存点的时候将立即释放该锁。 这与`ROLLBACK`取消保存点之后所有的影响的原则保持一致。 同样的原则也适用于在PL/pgSQL异常块中获得的锁：一个跳出块的错误将释放在块中获得的锁。
-
-**表 13-2. 冲突的锁模式**
-
-| 请求的锁模式                 | 当前的锁模式    |               |                        |       |                     |           |                  |      |
-| ---------------------- | --------- | ------------- | ---------------------- | ----- | ------------------- | --------- | ---------------- | ---- |
-| ACCESS SHARE           | ROW SHARE | ROW EXCLUSIVE | SHARE UPDATE EXCLUSIVE | SHARE | SHARE ROW EXCLUSIVE | EXCLUSIVE | ACCESS EXCLUSIVE |      |
-| ACCESS SHARE           |           |               |                        |       |                     |           |                  | X    |
-| ROW SHARE              |           |               |                        |       |                     |           | X                | X    |
-| ROW EXCLUSIVE          |           |               |                        |       | X                   | X         | X                | X    |
-| SHARE UPDATE EXCLUSIVE |           |               |                        | X     | X                   | X         | X                | X    |
-| SHARE                  |           |               | X                      | X     |                     | X         | X                | X    |
-| SHARE ROW EXCLUSIVE    |           |               | X                      | X     | X                   | X         | X                | X    |
-| EXCLUSIVE              |           | X             | X                      | X     | X                   | X         | X                | X    |
-| ACCESS EXCLUSIVE       | X         | X             | X                      | X     | X                   | X         | X                | X    |
-
-### 行锁
-
-除了表级锁以外，还有行级锁，在下文列出了行级锁以及在哪些情境下PostgreSQL会自动使用它们。行级锁的完整冲突表请见[表 13-3](http://www.postgres.cn/docs/9.6/explicit-locking.html#ROW-LOCK-COMPATIBILITY)。注意一个事务可能会在相同的行上保持冲突的锁，甚至是在不同的子事务中。但是除此之外，两个事务永远不可能在相同的行上持有冲突的锁。行级锁不影响数据查询，它们只阻塞对同一行的*写入者和加锁者*。
-
-**行级锁模式**
-
-- `FOR UPDATE`
-
-  `FOR UPDATE`会导致由`SELECT`语句检索到的行被锁定，就好像它们要被更新。这可以阻止它们被其他事务锁定、修改或者删除，一直到当前事务结束。也就是说其他尝试`UPDATE`、`DELETE`、`SELECT FOR UPDATE`、`SELECT FOR NO KEY UPDATE`、`SELECT FOR SHARE`或者`SELECT FOR KEY SHARE`这些行的事务将被阻塞，直到当前事务结束。反过来，`SELECT FOR UPDATE`将等待已经在相同行上运行以上这些命令的并发事务，并且接着锁定并且返回被更新的行（或者没有行，因为行可能已被删除）。不过，在一个`REPEATABLE READ`或`SERIALIZABLE`事务中，如果一个要被锁定的行在事务开始后被更改，将会抛出一个错误。进一步的讨论请见[第 13.4 节](http://www.postgres.cn/docs/9.6/applevel-consistency.html)。任何在一行上的`DELETE`命令也会获得`FOR UPDATE`锁模式，在某些列上修改值的`UPDATE`也会获得该锁模式。当前`UPDATE`情况中被考虑的列集合是那些具有能用于外键的唯一索引的列（所以部分索引和表达式索引不被考虑），但是这种要求未来有可能会改变。
-
-- `FOR NO KEY UPDATE`
-
-  行为与`FOR UPDATE`类似，不过获得的锁较弱：这种锁将不会阻塞尝试在相同行上获得锁的`SELECT FOR KEY SHARE`命令。任何不获取`FOR UPDATE`锁的`UPDATE`也会获得这种锁模式。
-
-- `FOR SHARE`
-
-  行为与`FOR NO KEY UPDATE`类似，不过它在每个检索到的行上获得一个共享锁而不是排他锁。一个共享锁会阻塞其他事务在这些行上执行`UPDATE`、`DELETE`、`SELECT FOR UPDATE`或者`SELECT FOR NO KEY UPDATE`，但是它不会阻止它们执行`SELECT FOR SHARE`或者`SELECT FOR KEY SHARE`。
-
-- `FOR KEY SHARE`
-
-  行为与`FOR SHARE`类似，不过锁较弱：`SELECT FOR UPDATE`会被阻塞，但是`SELECT FOR NO KEY UPDATE`不会被阻塞。一个键共享锁会阻塞其他事务执行修改键值的`DELETE`或者`UPDATE`，但不会阻塞其他`UPDATE`，也不会阻止`SELECT FOR NO KEY UPDATE`、`SELECT FOR SHARE`或者`SELECT FOR KEY SHARE`。
-
-PostgreSQL不会在内存里保存任何关于已修改行的信息，因此对一次锁定的行数没有限制。 不过，锁住一行会导致一次磁盘写，例如， `SELECT FOR UPDATE`将修改选中的行以标记它们被锁住，并且因此会导致磁盘写入。
-
-**表 13-3. 冲突的行级锁**
-
-| 要求的锁模式            | 当前的锁模式    |                   |            |      |
-| ----------------- | --------- | ----------------- | ---------- | ---- |
-| FOR KEY SHARE     | FOR SHARE | FOR NO KEY UPDATE | FOR UPDATE |      |
-| FOR KEY SHARE     |           |                   |            | X    |
-| FOR SHARE         |           |                   | X          | X    |
-| FOR NO KEY UPDATE |           | X                 | X          | X    |
-| FOR UPDATE        | X         | X                 | X          | X    |
-
-### 页锁
-
-除了表级别和行级别的锁以外，页面级别的共享/排他锁被用来控制对共享缓冲池中表页面的读/写。 这些锁在行被抓取或者更新后马上被释放。应用开发者通常不需要关心页级锁，我们在这里提到它们只是为了完整。
-
-
-
-## 死锁
-
-显式锁定的使用可能会增加*死锁*的可能性，死锁是指两个（或多个）事务相互持有对方想要的锁。例如，如果事务 1 在表 A 上获得一个排他锁，同时试图获取一个在表 B 上的排他锁， 而事务 2 已经持有表 B 的排他锁，同时却正在请求表 A 上的一个排他锁，那么两个事务就都不能进行下去。PostgreSQL能够自动检测到死锁情况并且会通过中断其中一个事务从而允许其它事务完成来解决这个问题（具体哪个事务会被中断是很难预测的，而且也不应该依靠这样的预测）。
-
-要注意死锁也可能会作为行级锁的结果而发生（并且因此，它们即使在没有使用显式锁定的情况下也会发生)。考虑如下情况，两个并发事务在修改一个表。第一个事务执行：
-
-```
-UPDATE accounts SET balance = balance + 100.00 WHERE acctnum = 11111;
-```
-
-这样就在指定帐号的行上获得了一个行级锁。然后，第二个事务执行：
-
-```
-UPDATE accounts SET balance = balance + 100.00 WHERE acctnum = 22222;
-UPDATE accounts SET balance = balance - 100.00 WHERE acctnum = 11111;
-```
-
-第一个`UPDATE`语句成功地在指定行上获得了一个行级锁，因此它成功更新了该行。 但是第二个`UPDATE`语句发现它试图更新的行已经被锁住了，因此它等待持有该锁的事务结束。事务二现在就在等待事务一结束，然后再继续执行。现在，事务一执行：
-
-```
-UPDATE accounts SET balance = balance - 100.00 WHERE acctnum = 22222;
-```
-
-事务一试图在指定行上获得一个行级锁，但是它得不到：事务二已经持有了这样的锁。所以它要等待事务二完成。因此，事务一被事务二阻塞，而事务二也被事务一阻塞：一个死锁。 PostgreSQL将检测这样的情况并中断其中一个事务。
-
-防止死锁的最好方法通常是保证所有使用一个数据库的应用都以一致的顺序在多个对象上获得锁。在上面的例子里，如果两个事务以同样的顺序更新那些行，那么就不会发生死锁。 我们也应该保证一个事务中在一个对象上获得的第一个锁是该对象需要的最严格的锁模式。如果我们无法提前验证这些，那么可以通过重试因死锁而中断的事务来即时处理死锁。
-
-只要没有检测到死锁情况，寻求一个表级或行级锁的事务将无限等待冲突锁被释放。这意味着一个应用长时间保持事务开启不是什么好事（例如等待用户输入）。
-
-
-
-## 咨询锁
-
-PostgreSQL提供了一种方法创建由应用定义其含义的锁。这种锁被称为*咨询锁*，因为系统并不强迫其使用 — 而是由应用来保证其正确的使用。咨询锁可用于 MVCC 模型不适用的锁定策略。例如，咨询锁的一种常用用法是模拟所谓"平面文件"数据管理系统典型的悲观锁策略。虽然一个存储在表中的标志可以被用于相同目的，但咨询锁更快、可以避免表膨胀并且会由服务器在会话结束时自动清理。
-
-有两种方法在PostgreSQL中获取一个咨询锁：在会话级别或在事务级别。一旦在会话级别获得了咨询锁，它将被保持直到被显式释放或会话结束。不同于标准锁请求，会话级咨询锁请求不尊重事务语义：在一个后来被回滚的事务中得到的锁在回滚后仍然被保持，并且同样即使调用它的事务后来失败一个解锁也是有效的。一个锁在它所属的进程中可以被获取多次；对于每一个完成的锁请求必须有一个相应的解锁请求，直至锁被真正释放。在另一方面，事务级锁请求的行为更像普通锁请求：在事务结束时会自动释放它们，并且没有显式的解锁操作。这种行为通常比会话级别的行为更方便，因为它使用一个咨询锁的时间更短。对于同一咨询锁标识符的会话级别和事务级别的锁请求按照期望将彼此阻塞。如果一个会话已经持有了一个给定的咨询锁，由它发出的附加请求将总是成功，即使有其他会话在等待该锁；不管现有的锁和新请求是处在会话级别还是事务级别，这种说法都是真的。
-
-和所有PostgreSQL中的锁一样，当前被任何会话所持有的咨询锁的完整列表可以在[`pg_locks`](http://www.postgres.cn/docs/9.6/view-pg-locks.html)系统视图中找到。
-
-咨询锁和普通锁都被存储在一个共享内存池中，它的尺寸由[max_locks_per_transaction](http://www.postgres.cn/docs/9.6/runtime-config-locks.html#GUC-MAX-LOCKS-PER-TRANSACTION)和[max_connections](http://www.postgres.cn/docs/9.6/runtime-config-connection.html#GUC-MAX-CONNECTIONS)配置变量定义。 必须当心不要耗尽这些内存，否则服务器将不能再授予任何锁。这对服务器可以授予的咨询锁数量设置了一个上限，根据服务器的配置不同，这个限制通常是数万到数十万。
-
-在使用咨询锁方法的特定情况下，特别是查询中涉及显式排序和`LIMIT`子句时，由于 SQL 表达式被计算的顺序，必须小心控制锁的获取。例如：
-
-```
-SELECT pg_advisory_lock(id) FROM foo WHERE id = 12345; -- ok
-SELECT pg_advisory_lock(id) FROM foo WHERE id > 12345 LIMIT 100; -- danger!
-SELECT pg_advisory_lock(q.id) FROM
+```sql
+CREATE TABLE pg_locks
 (
-  SELECT id FROM foo WHERE id > 12345 LIMIT 100
-) q; -- ok
+    -- 锁针对的客体对象
+    locktype           text, -- 锁类型：关系，页面，元组，事务ID，对象等
+    database           oid,  -- 数据库OID
+    relation           oid,  -- 关系OID
+    page               integer, -- 关系内页号
+    tuple              smallint, -- 页内元组号
+    virtualxid         text,     -- 虚拟事务ID
+    transactionid      xid,      -- 事务ID
+    classid            oid,      -- 锁对象所属系统目录表本身的OID
+    objid              oid,      -- 系统目录内的对象的OID
+    objsubid           smallint, -- 列号
+  
+    -- 持有|等待锁的主体
+    virtualtransaction text,     -- 持锁|等待锁的虚拟事务ID
+    pid                integer,  -- 持锁|等待锁的进程PID
+    mode               text,     -- 锁模式
+    granted            boolean,  -- t已获取，f等待中
+    fastpath           boolean   -- t通过fastpath获取
+);
 ```
 
-在上述查询中，第二种形式是危险的，因为不能保证在锁定函数被执行之前应用`LIMIT`。这可能导致获得某些应用不期望的锁，并因此在会话结束之前无法释放。 从应用的角度来看，这样的锁将被挂起，虽然它们仍然在`pg_locks`中可见。
+| 名称                 | 类型       | 描述                                                         |
+| -------------------- | ---------- | ------------------------------------------------------------ |
+| `locktype`           | `text`     | 可锁对象的类型： `relation`， `extend`， `page`， `tuple`， `transactionid`， `virtualxid`， `object`， `userlock`或`advisory` |
+| `database`           | `oid`      | 若锁目标为数据库（或下层对象），则为数据库OID，并引用`pg_database.oid`，共享对象为0，否则为空 |
+| `relation`           | `oid`      | 若锁目标为关系（或下层对象），则为关系OID，并引用`pg_class.oid`，否则为空 |
+| `page`               | `integer`  | 若锁目标为页面（或下层对象），则为页面号，否则为空           |
+| `tuple`              | `smallint` | 若锁目标为元组，则为页内元组号，否则为空                     |
+| `virtualxid`         | `text`     | 若锁目标为虚拟事务，则为虚拟事务ID，否则为空                 |
+| `transactionid`      | `xid`      | 若锁目标为事务，则为事务ID，否则为空                         |
+| `classid`            | `oid`      | 若目标为数据库对象，则为该对象相应**系统目录**的OID，并引用`pg_class.oid`，否则为空。 |
+| `objid`              | `oid`      | 锁目标在其系统目录中的OID，如目标不是普通数据库对象则为空    |
+| `objsubid`           | `smallint` | 锁的目标列号（`classid`和`objid`指向表本身），若目标是某种其他普通数据库对象则此列为0，如果目标不是一个普通数据库对象则此列为空。 |
+| `virtualtransaction` | `text`     | 持有或等待这个锁的虚拟ID                                     |
+| `pid`                | `integer`  | 持有或等待这个锁的服务器进程ID，如果此锁被一个预备事务所持有则为空 |
+| `mode`               | `text`     | 持有或者等待锁的模式                                         |
+| `granted`            | `boolean`  | 为真表示已经获得的锁，为假表示还在等待的锁                   |
+| `fastpath`           | `boolean`  | 为真表示锁是通过fastpath获取的                               |
 
-提供的操作咨询锁函数在[第 9.26.10 节](http://www.postgres.cn/docs/9.6/functions-admin.html#FUNCTIONS-ADVISORY-LOCKS)中描述。
+#### 样例数据
+
+![](../img/pg-lock-sample.png)
+
+这个视图需要一些额外的知识才能解读。
+
+* 该视图是**数据库集簇**范围的视图，而非仅限于单个数据库，即可以看见其他数据库中的锁。
+* 一个进程在一个时间点只能等待至多一个锁，等待锁用`granted=f`表示，等待进程会休眠至其他锁被释放，或者系统检测到死锁。
+* 每个事务都有一个虚拟事务标识`virtualtransaction`（以下简称`vxid`），修改数据库状态（或者显式调用`txid_current`获取）的事务才会被分配一个真实的事务标识`transactionid`（简称`txid`），**`vxid|txid`本身也是可以锁定的对象**。
+* 每个事务都会持有自己`vxid`上的`Exclusive`锁，如果有`txid`，也会**同时**持有其上的`Exclusive`锁（即同时持有`txid`和`vxid`上的排它锁）。因此当一个事务需要等待另一个事务时，它会尝试获取另一个事务`txid|vxid`上的共享锁，因而只有当目标事务结束（自动释放自己事务标识上的`Exclusive`锁）时，等待事务才会被唤醒。
+* `pg_locks`视图通常并不会直接显示**行级锁**信息，因为这些信息存储在磁盘磁盘上（），如果真的有进程在等待行锁，显示的形式通常是一个事务等待另一个事务，而不是等待某个具体的行锁。
+* 咨询锁本质上的锁对象客体是一个数据库范畴内的BIGINT，`classid`里包含了该整数的高32bit，`objid`里包含有低32bit，`objsubid`里则说明了咨询锁的类型，单一Bigint则取值为`1`，两个int32则取值为`2`。
+* 本视图并不一定能保证提供一个一致的快照，因为所有`fastpath=true`的锁信息是从每个后端进程收集而来的，而`fastpath=false`的锁是从常规锁管理器中获取的，同时谓词锁管理器中的数据也是单独获取的，因此这几种来源的数据之间可能并不一致。
+* 频繁访问本视图会对数据库系统性能产生影响，因为要对锁管理器加锁获取一致性快照。
+
+> **虚拟事务**
+>
+> 一个后端进程在整个生命周期中的每一个事务都会有一个自己的**虚拟事务ID**。
+>
+> PG中事务号是有限的（32-bit整型），会循环使用。为了节约事务号，PG只会为**实际修改数据库状态的事务**分配真实事务ID，而只读事务就不分配了，用虚拟事务ID凑合一下。`txid`是事务标识，全局共享，而`vxid`是虚拟事务标识，在**短期**内可以保证全局唯一性。因为`vxid`由两部分组成：`BackendID`与`LocalTransactionId`，前者是后端进程的标识符（本进程在内存中进程数组中的序号），后者是一个递增的事务计数器。因此两者组合即可获得一个暂时唯一的虚拟事务标识（之所以是暂时是因为这里的后端ID是有可能重复的）
+>
+> ```c
+> typedef struct {
+> 	BackendId	backendId;		/* 后端ID，初始化时确定，其实是后端进程数组内索引号 */
+> 	LocalTransactionId localTransactionId;	/* 后端内本地使用的进程ID，其实就是命令序号 */
+> } VirtualTransactionId;
+> ```
 
 
 
-## 处理锁的7条建议
 
-数据库操作过程中，一些不恰当的操作，会导致数据库发生锁阻塞，影响DB性能；但是，同样的操作，我们可以通过恰当的操作，避免这一问题，如下是一些建议，欢迎补充；
 
-#### 禁止添加一个列的时候设定一个默认值
 
-这是一个黄金定律：在生产环境中，添加一个列的时候，不要指定一个默认值
 
-添加列，会采用非常激进的锁策略，这会阻塞读写；如果你添加的列带有默认值，PostgreSQL会重写整张表，来对每一行设置默认值，在大表上可能会是几个小时的工作，这样所有查询就会被阻塞，数据库不可用；
+## 应用
 
-- DO NOT
+### 常见操作的冲突关系
+
+- `SELECT`与`UPDATE|DELETE|INSERT`不会相互阻塞，即使访问的是同一行。
+- `I|U|D`写入操作与`I|U|D`写入操作在表层面不会互斥，会在具体的行上通过`RowExclusive`锁实现。
+- `SELECT FOR UPDATE`锁定操作与`I|U|D`写入在表层级也不会互斥，仍然是通过具体元组上的行锁实现。
+- 并发`VACUUM`，并发创建索引等操作不会阻塞读写，但它们是自斥的，即同一时刻只会有一个（所以同时在一个表上执行两个`CREATE INDEX CONCURRENTLY`是没有意义的，不要被名字骗了）
+- 普通的索引创建`CREATE INDEX`，不带`CONCURRENTLY`会阻塞增删改，但不会阻塞查，很少用到。
+- 任何对于触发器的操作，或者约束类的操作，都会阻止增删改，但不会阻塞只读查询以及锁定。
+- 冷门的命令`REFRESH MATERIALIZED VIEW CONCURRENTLY`允许`SELECT`和锁定。
+- 大多数很硬的变更：`VACUUM FULL`, `DROP TABLE`, `TRUNCATE`, `ALTER TABLE`的大多数形式都会阻塞一切读取。
+
+注意，锁虽有强弱之分，但冲突关系是对等的。一个持有`AccessShare`锁的`SELECT`会阻止后续的`DROP TABLE`获得`AccessExclusive`锁。后面的命令会进入锁队列中。
+
+### 锁队列
+
+PG中每个锁上都会有一个锁队列。如果事务A占有一个排他锁，那么事务B在尝试获取其上的锁时就会在其锁队列中等待。如果这时候事务C同样要获取该锁，那么它不仅要和事务A进行冲突检测，也要和B进行冲突检测，以及队列中其他的事务。这意味着当用户尝试获取一个很强的锁而未得等待时，已经会阻止后续新锁的获取。一个具体的例子是加列：
 
 ```sql
--- 读写都会被阻塞
-ALTER TABLE items ADD COLUMN last_update timestamptz DEFAULT now();
+ALTER TABLE tbl ADD COLUMN mtime TIMESTAMP;
 ```
 
-- INSTEAD
+即使这是一个不带默认值的加列操作（不会重写整个表，因而很快），但本命令需要表上的`AccessExclusive`锁，如果这张表上面已经有不少查询，那么这个命令可能会等待相当一段时间。因为它需要等待其他查询结束并释放掉锁后才能执行。相应地，因为这条命令已经在等待队列中，后续的查询都会被它所阻塞。因此，当执行此类命令时的一个最佳实践是在此类命令前修改`lock_timeout`，从而避免雪崩。
 
 ```sql
--- select, update, insert, 和 delete 都会阻塞
-ALTER TABLE items ADD COLUMN last_update timestamptz;
--- select 和 insert 可行, 当表重写的时候，部分update·和delete会被阻塞
-UPDATE items SET last_update = now();
+SET lock_timeout TO '1s'
+ALTER TABLE tbl ADD COLUMN mtime TIMESTAMP;
 ```
 
-- BETTER
+这个设计的好处是，命令不会饿死：不会出现源源不断的短小只读查询无限阻塞住一个排他操作。
 
-  ```c
-  do {
-    numRowsUpdated = executeUpdate(
-      "UPDATE items SET last_update = ? " +
-      "WHERE ctid IN (SELECT ctid FROM items WHERE last_update IS NULL LIMIT 5000)",
-      now);
-  } while (numRowsUpdate > 0);
-  ```
+### 加锁原则
 
-  为了避免阻塞update和delete，可以一小批的更新，这样添加一个新列，减少对用户的影响
+* 够用即可：使用满足条件的锁中最弱的锁模式
+* 越快越好：如果可能，可以用（长时间的弱锁+短时间的强锁）替换长时间的强锁
+* 递增获取：遵循2PL原则申请锁；越晚使用激进锁策略越好；在真正需要时再获取。
+* 相同顺序：获取锁尽量以一致的顺序获取，从而减小死锁的几率
 
-#### 理解锁队列，使用lock timeout
 
-每个PostgreSQL中的锁都有一个锁队列。如果一个锁是排他的，事务A占有，事务B获取的时候，就会在锁队列中等待。有趣的是，如果这时候事务C同样要获取该锁，那么它不仅要和A检查冲突性，也要和B检查冲突性，以及队列中其他的事务；
 
-利用以下查询，可以看出哪些数据库上有锁在等待，其中granted列表示有些锁现在还没有被授予；
+### 最小化锁阻塞时长
+
+除了手工锁定之外，很多常见的操作都会"锁表"，最常见的莫过于添加新字段与添加新约束。这两种操作都会获取表上的`AccessExclusive`锁以阻止一切并发访问。当DBA需要在线维护数据库时应当最小化持锁的时间。
+
+例如，为表添加新字段的`ALTER TABLE ADD COLUMN`子句，根据新列是否提供易变默认值，会重写整个表。
 
 ```sql
-select relation::regclass, locktype, mode, granted FROM pg_locks where relation::regclass::text != 'pg_locks';
+ALTER TABLE tbl ADD COLUMN mtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 ```
 
-这就意味着，即使你的DDL语句可以很快的执行，但是它可能会在队列中等待很久，直到前面的查询结束。并且该DDL操作会将后续的查询阻塞；
+如果只是个小表，业务负载也不大，那么也许可以直接这么干。但如果是很大的表，以及很高的负载，那么阻塞的时间就会很可观。在这段时间里，命令都会持有表上的`AccessExclusive`锁阻塞一切访问。
 
-当你在一个表上，执行一个长查询的时候；
-
-DO NOT
+可以通过先加一个空列，再慢慢更新的方式来最小化锁等待时间：
 
 ```sql
-ALTER TABLE items ADD COLUMN last_update timestamptz;
+ALTER TABLE tbl ADD COLUMN mtime TIMESTAMP;
+UPDATE tbl SET mtime = CURRENT_TIMESTAMP; -- 可以分批进行
 ```
 
-INSTEAD
+这样，第一条加列操作的锁阻塞时间就会非常短，而后面的更新（重写）操作就可以以不阻塞读写的形式慢慢进行，最小化锁阻塞。
+
+同理，当想要为表添加新的约束时（例如新的主键），也可以采用这种方式：
 
 ```sql
-SET lock_timeout TO '2s'
-ALTER TABLE items ADD COLUMN last_update timestamptz;
+CREATE UNIQUE INDEX CONCURRENTLY tbl_pk ON tbl(id); -- 很慢，但不阻塞读写
+ALTER TABLE tbl ADD CONSTRAINT tbl_pk PRIMARY KEY USING INDEX tbl_pk;  -- 阻塞读写，但很快
 ```
 
-通过设置`lock_timeout`，这个DDL语句如果遇到锁等待，最终会失败，进而后续的查询只会阻塞2s；这样不好的一点就是，alter table 可能会失败，但是你可以重试；并且可以查看pg_stat_activity看看，是不是有慢查询；
-
-#### CREATE INDEX CONCURRENTLY
-
-另一个黄金定律：永远并发的建索引
-
-在一个大数据集上建索引，有可能会花费数小时甚至数天的时间；常规的create index会阻塞所有的写操作；尽管不阻塞select，但是这还是不好的；
-
-NO
+替代单纯的
 
 ```sql
--- blocks all writes
-CREATE INDEX items_value_idx ON items USING GIN (value jsonb_path_ops);
+ALTER TABLE tbl ADD PRIMARY KEY (id); 
 ```
 
-INSTEAD
 
-```sql
--- only blocks other DDL
-CREATE INDEX CONCURRENTLY items_value_idx ON items USING GIN (value jsonb_path_ops);
-```
 
-并行的创建索引确实有缺点。如果出了问题，它不会回滚，这会留下一个未完成的index；但是不用担心，`DROP INDEX CONCURRENTLY items_value_idx`，重新创建即可。
-
-#### 越晚使用激进锁策略越好
-
-当在一个表上执行需要获得激进策略锁的时候，越晚越好，影响越小；比如如果你想替换一个表的内容；
-
-DO NOT
-
-```sql
-BEGIN;
--- 读写都被阻塞
-TRUNCATE items;
--- long-running operation:
-\COPY items FROM 'newdata.csv' WITH CSV 
-COMMIT; 
-```
-
-Instead
-
-```sql
-BEGIN;
-CREATE TABLE items_new (LIKE items INCLUDING ALL);
--- long-running operation:
-\COPY items_new FROM 'newdata.csv' WITH CSV
--- 读写从这开始阻塞
-DROP TABLE items;
-ALTER TABLE items_new RENAME TO items;
-COMMIT; 
-```
-
-这里有个问题，我们不从一开始阻塞写。这样老的items表，在我们drop它之前，会发生改变；为了避免这一个情况，可以在一开始将表锁住，阻塞写，但是不阻塞读；
-
-```sql
-BEGIN;
-LOCK items IN EXCLUSIVE MODE;
-...
-```
-
-#### 添加主键的时候最小化锁阻塞
-
-在表上添加一个主键是有意义的，PostgreSQL中，可以通过alter table很方便的添加一个主键，但是当主键索引创建的时候，会花费很长时间，这样会阻塞查询；
-
-DO NOT
-
-```sql
-ALTER TABLE items ADD PRIMARY KEY (id); 
-```
-
-INSTEAD
-
-```sql
-CREATE UNIQUE INDEX CONCURRENTLY items_pk ON items (id); -- 花很长时间，但是不会阻塞读写
-ALTER TABLE items ADD CONSTRAINT items_pk PRIMARY KEY USING INDEX items_pk;  -- 阻塞读写，但是很短
-```
-
-通过将主键索引的创建，分成两步；这样繁重的创建索引的工作不会影响业务查询；
-
-#### 禁止VACUUM FULL
-
-比起这个操作，我们应该调整AUTOVACUUM设置和使用index来提升查询，定时的使用VACUUM，而不是VACUUM FULL
-
-#### 调整命令顺序，避免死锁
-
-如下两个事务,会导致死锁
-
-```sql
-BEGIN;
-UPDATE items SET counter = counter + 1 WHERE key = 'hello'; -- grabs lock on hello
-UPDATE items SET counter = counter + 1 WHERE key = 'world'; -- blocks waiting for world
-END;
-```
-
-```sql
-BEGIN
-UPDATE items SET counter = counter + 1 WHERE key = 'world'; -- grabs lock on world
-UPDATE items SET counter = counter + 1 WHERE key = 'hello';  -- blocks waiting for hello
-END; 
-```
-
-在一应用中，调整调用顺序，避免互相锁住对方

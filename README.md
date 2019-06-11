@@ -19,7 +19,6 @@
 - [x] [区块链与分布式数据库](misc/blockchain-and-database.md)
 - [x] [一致性：一个过载的术语](misc/consistency-linearizability.md)
 - [x] [架构演化：成熟度模型](misc/maturity-model.md)
-- [x] [杂文](misc/industry/README.md)
 
 
 
