@@ -188,7 +188,7 @@ CREATE TABLE pg_locks
 > ```c
 > typedef struct {
 > 	BackendId	backendId;		/* 后端ID，初始化时确定，其实是后端进程数组内索引号 */
-> 	LocalTransactionId localTransactionId;	/* 后端内本地使用的进程ID，其实就是命令序号 */
+> 	LocalTransactionId localTransactionId;	/* 后端内本地使用的命令标ID，类似自增计数器 */
 > } VirtualTransactionId;
 > ```
 
@@ -224,7 +224,7 @@ ALTER TABLE tbl ADD COLUMN mtime TIMESTAMP;
 即使这是一个不带默认值的加列操作（不会重写整个表，因而很快），但本命令需要表上的`AccessExclusive`锁，如果这张表上面已经有不少查询，那么这个命令可能会等待相当一段时间。因为它需要等待其他查询结束并释放掉锁后才能执行。相应地，因为这条命令已经在等待队列中，后续的查询都会被它所阻塞。因此，当执行此类命令时的一个最佳实践是在此类命令前修改`lock_timeout`，从而避免雪崩。
 
 ```sql
-SET lock_timeout TO '1s'
+SET lock_timeout TO '1s';
 ALTER TABLE tbl ADD COLUMN mtime TIMESTAMP;
 ```
 

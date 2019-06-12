@@ -154,10 +154,6 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 **SQL**
 
-- [ ] PostgreSQL数据类型 —— 数值类型
-- [ ] PostgreSQL数据类型 —— 文本类型
-- [ ] PostgreSQL数据类型 —— 文本字面值
-- [ ] PostgreSQL数据类型 —— 网络类型
 - [x] [PostgreSQL中的触发器](sql/trigger.md)
 - [x] [PostgreSQL中的锁](sql/lock.md)
 - [ ] PostgreSQL的LOCALE与本地化

@@ -97,11 +97,9 @@ SQL92标准对于隔离级别的定义是**有缺陷的** —— 模糊，不精
 
 ![](../img/conncurrent-isolation-levels.png)
 
-图：一致性与隔离等级偏序关系
+**图：一致性与隔离等级偏序关系**
 
-
-
-为了讨论便利，本图中刨除了MAV、CS、I-CI、P-CI等隔离等级，主要需要关注的是**快照隔离SI**。
+右子树主要讨论的是多副本情况下的一致性等级，略过不提。为了讨论便利起见，本图中刨除了MAV、CS、I-CI、P-CI等隔离等级，主要需要关注的是**快照隔离SI**。
 
 **表：各个隔离等级及其可能出现的异常现象**
 
@@ -246,7 +244,7 @@ START TRANSACTION ISOLATION LEVEL REPEATABLE READ; -- T1, RR, 只读
 START TRANSACTION ISOLATION LEVEL READ COMMITTED;  -- T2, RC, 读写
 
 SELECT * FROM counter WHERE k = 'x'; -- T1, 查询不到任何结果
-INSERT INTO counter VALUES('x', 10); -- T2, 插入记录(x,1RR
+INSERT INTO counter VALUES('x', 10); -- T2, 插入记录(x,10) @ RR
 COMMIT; -- T2, 提交
 
 SELECT * FROM counter WHERE k = 'x'; -- T1, 还是查询不到任何结果

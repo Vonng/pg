@@ -347,17 +347,31 @@ client_port      | 53420
 
 无论是JDBC还是Go语言的PostgreSQL驱动，都提供了相应的基础设施，用于处理复制连接。
 
-这里让我们用Go语言编写一个简单的CDC客户端，样例使用了[`jackc/pgx`](https://github.com/jackx/pgx)，一个很不错的Go语言编写的PostgreSQL驱动。这里的代码只是作为概念演示，因此忽略掉了错误处理。将下面的代码保存为`main.go`，执行`go run main.go`即可执行。默认的三个参数分别为数据库连接串，逻辑解码输出插件的名称，以及复制槽的名称。
+这里让我们用Go语言编写一个简单的CDC客户端，样例使用了[`jackc/pgx`](https://github.com/jackx/pgx)，一个很不错的Go语言编写的PostgreSQL驱动。这里的代码只是作为概念演示，因此忽略掉了错误处理，非常Naive。将下面的代码保存为`main.go`，执行`go run main.go`即可执行。
+
+默认的三个参数分别为数据库连接串，逻辑解码输出插件的名称，以及复制槽的名称。默认值为：
+
+```go
+dsn := "postgres://localhost:5432/postgres?application_name=cdc"
+plugin := "test_decoding"
+slot := "test_slot"
+```
+
+```
+go run main.go postgres:///postgres?application_name=cdc test_decoding test_slot
+```
+
+代码如下所示：
 
 ```go
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"time"
 
+	"context"
 	"github.com/jackc/pgx"
 )
 
@@ -386,7 +400,8 @@ func (s *Subscriber) CreateReplicationSlot() {
 	if consistPoint, snapshotName, err := s.Conn.CreateReplicationSlotEx(s.Slot, s.Plugin); err != nil {
 		log.Fatalf("fail to create replication slot: %s", err.Error())
 	} else {
-		log.Printf("create replication slot %s with plugin %s : consist snapshot: %s, snapshot name: %s", s.Slot, s.Plugin, consistPoint, snapshotName)
+		log.Printf("create replication slot %s with plugin %s : consist snapshot: %s, snapshot name: %s",
+			s.Slot, s.Plugin, consistPoint, snapshotName)
 		s.LSN, _ = pgx.ParseLSN(consistPoint)
 	}
 }
@@ -420,17 +435,40 @@ func (s *Subscriber) Subscribe() {
 		// 等待一条消息, 消息有可能是真的消息，也可能只是心跳包
 		message, _ = s.Conn.WaitForReplicationMessage(context.Background())
 		if message.WalMessage != nil {
-			// 如果是真的消息就消费它，可能是成功写入kafka，或者只是简单地打印出来。
-			log.Printf("[LSN] %s [Message] %s", pgx.FormatLSN(message.WalMessage.WalStart), string(message.WalMessage.WalData))
-			if message.WalMessage.WalStart > s.LSN { // 更新消费进度并向主库汇报
+			DoSomething(message.WalMessage) // 如果是真的消息就消费它
+			if message.WalMessage.WalStart > s.LSN { // 消费完后更新消费进度，并向主库汇报
 				s.LSN = message.WalMessage.WalStart + uint64(len(message.WalMessage.WalData))
 				s.ReportProgress()
 			}
 		}
+		// 如果是心跳包消息，按照协议，需要检查服务器是否要求回送进度。
 		if message.ServerHeartbeat != nil && message.ServerHeartbeat.ReplyRequested == 1 {
 			s.ReportProgress() // 如果服务器心跳包要求回送进度，则汇报进度
 		}
 	}
+}
+
+// 实际消费消息的函数，这里只是把消息打印出来，也可以写入Redis，写入Kafka，更新统计信息，发送邮件等
+func DoSomething(message *pgx.WalMessage) {
+	log.Printf("[LSN] %s [Payload] %s", 
+             pgx.FormatLSN(message.WalStart), string(message.WalData))
+}
+
+// 如果使用JSON解码插件，这里是用于Decode的Schema
+type Payload struct {
+	Change []struct {
+		Kind         string        `json:"kind"`
+		Schema       string        `json:"schema"`
+		Table        string        `json:"table"`
+		ColumnNames  []string      `json:"columnnames"`
+		ColumnTypes  []string      `json:"columntypes"`
+		ColumnValues []interface{} `json:"columnvalues"`
+		OldKeys      struct {
+			KeyNames  []string      `json:"keynames"`
+			KeyTypes  []string      `json:"keytypes"`
+			KeyValues []interface{} `json:"keyvalues"`
+		} `json:"oldkeys"`
+	} `json:"change"`
 }
 
 func main() {
@@ -451,7 +489,7 @@ func main() {
 		URL:    dsn,
 		Slot:   slot,
 		Plugin: plugin,
-	} // 创建新的CDC客户端
+	}                                // 创建新的CDC客户端
 	subscriber.DropReplicationSlot() // 如果存在，清理掉遗留的Slot
 
 	subscriber.Connect()                   // 建立复制连接
@@ -463,8 +501,8 @@ func main() {
 			time.Sleep(5 * time.Second)
 			subscriber.ReportProgress()
 		}
-	}() // 协程2每5秒地向主库汇报进度
-	subscriber.Subscribe() // 主消息循环
+	}()                                    // 协程2每5秒地向主库汇报进度
+	subscriber.Subscribe()                 // 主消息循环
 }
 
 ```
@@ -514,8 +552,6 @@ confirmed_flush_lsn | 2D/AB269AB8       -- 客户端确认完成的消息进度
 
 
 
-
-
 ## 局限性
 
 想要在生产环境中使用CDC，还需要考虑一些其他的问题。略有遗憾的是，在PostgreSQL CDC的天空上，还飘着两朵小乌云。
@@ -541,13 +577,15 @@ LogicalDecodeShutdownCB shutdown_cb;
 
 但是尝试从目前的变更事件流生成完备的UNDO Log是不可能的，因为目前模式的变更DDL并不会记录在逻辑解码的输出中。好消息是未来会有越来越多的钩子与支持，因此这个问题是可解的。
 
-另外需要注意的一点是，有一些输出插件会无视`Begin`与`Commit`消息。但这两条消息本身也是数据库变更日志的一部分，如果输出插件忽略了这些消息，那么CDC Client在汇报消费进度时就可能会出现偏差（落后一条消息的偏移量）。在一些边界条件下，这可能会触发一些问题。(例如使用了同步提交，主库迟迟等不到从库的确认而卡住)
+### 同步提交
+
+需要注意的一点是，**有一些输出插件会无视`Begin`与`Commit`消息**。这两条消息本身也是数据库变更日志的一部分，如果输出插件忽略了这些消息，那么CDC客户端在汇报消费进度时就可能会出现偏差（落后一条消息的偏移量）。在一些边界条件下可能会触发一些问题：例如写入极少的数据库启用同步提交时，主库迟迟等不到从库确认最后的`Commit`消息而卡住)
 
 ### 故障切换
 
 理想很美好，现实很骨感。当一切正常时，CDC工作流工作的很好。但当数据库出现故障，或者出现故障转移时，事情就变得比较棘手了。
 
-#### 恰好一次保证
+**恰好一次保证**
 
 另外一个使用PostgreSQL CDC的问题是消息队列中经典的**恰好一次**问题。
 
@@ -555,22 +593,16 @@ PostgreSQL的逻辑复制实际上提供的是**至少一次**保证，因为消
 
 解决方法是：逻辑复制的消费者也需要记录自己的消费者偏移量，以便跳过重复的消息，实现真正的**恰好一次** 消息传达保证。这并不是一个真正的问题，只是任何试图自行实现CDC客户端的人都应当注意这一点。
 
-#### Failover Slot
+**Failover Slot**
 
-对目前PostgreSQL的CDC来说，Failover Slot是最大的难点与痛点。
+对目前PostgreSQL的CDC来说，Failover Slot是最大的难点与痛点。逻辑复制依赖复制槽，因为复制槽持有着消费者的状态，记录着消费者的消费进度，因而数据库不会将消费者还没处理的消息清理掉。
 
-逻辑复制依赖复制槽，因为复制槽持有着消费者的状态，记录着消费者的消费进度，从而避免了数据库将消费者还没处理的消息回收掉。
+但以目前的实现而言，复制槽只能用在**主库**上，且**复制槽本身并不会被复制到从库**上。因此当主库进行Failover时，消费者偏移量就会丢失。如果在新的主库承接任何写入之前没有重新建好逻辑复制槽，就有可能会丢失一些数据。对于非常严格的场景，使用这个功能时仍然需要谨慎。
 
-但以目前的实现而言，复制槽只能用在**主库**上，且**复制槽本身并不会被复制到从库**上。因此当主库进行Failover时，消费者偏移量就会丢失。如果在新的主库承接任何写入之前没有重新建好逻辑复制槽，就有可能会丢失一些数据。因此对于非常严格的场景，使用这个功能时仍然需要谨慎。
+这个问题计划将于下一个大版本（13）解决，Failover Slot的[Patch](https://commitfest.postgresql.org/23/1961/)计划于版本13（2020）年合入主线版本。
 
-这个问题的解决方案包括：
+在那之前，如果希望在生产中使用CDC，那么务必要针对故障切换进行充分地测试。例如使用CDC的情况下，Failover的操作就需要有所变更：核心思想是运维与DBA必须手工完成复制槽的复制工作。在Failover前可以在原主库上启用同步提交，暂停写入流量并在新主库上使用脚本复制复制原主库的槽，并在新主库上创建同样的复制槽，从而手工完成复制槽的Failover。对于紧急故障切换，即原主库无法访问，需要立即切换的情况，也可以在事后使用PITR重新将缺失的变更恢复出来。
 
-* 我不在乎丢一点儿数据。
-* 进行审慎的Failover
-  * 进行Failover前，确保消费者已经追赶至最新进度（可以考虑开启同步提交）。
-  * Failover中，在新的主库承接新的写流量之前，先将复制槽建立好。
-
-* 对于紧急Failover，使用数据库PITR备份事后手工修复缺失的变更数据
-* 等待Failover Slot的[Patch](https://commitfest.postgresql.org/23/1961/)合入PostgreSQL主线（版本13），有了FailoverSlot，这个问题就不再成为问题。
+小结一下：CDC的功能机制已经达到了生产应用的要求，但可靠性的机制还略有欠缺，这个问题可以等待下一个主线版本，或通过审慎地手工操作解决，当然激进的用户也可以自行拉取该补丁提前尝鲜。
 
 
