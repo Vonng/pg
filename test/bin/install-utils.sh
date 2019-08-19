@@ -99,12 +99,13 @@ function install_utils() {
         lsof \
         wget \
         unzip $@ >/dev/null 2>&1
-
+    
     if [[ $? != 0 ]]; then
         echo 'error: install utils failed'
         return 3
     fi
-
+    # retry install 
+    yum install -y ntp uuid readline lz4 nc libxml2 libxslt lsof wget unzip sysstat vim 
     systemctl enable ntpd > /dev/null 2>&1
     systemctl start  ntpd > /dev/null 2>&1
 
