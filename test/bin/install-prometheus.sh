@@ -24,12 +24,12 @@ PROG_NAME="$(basename $0)"
 # Desc: Guarantee a usable prometheus in ${target_location}
 # Arg1: target prometheus location  (/usr/local/bin/prometheus)
 # Arg2: cache  prometheus location  (/opt/pkg/prometheus)
-# Arg3: prometheus version to download  (2.7.1)
+# Arg3: prometheus version to download  (2.14.0)
 #--------------------------------------------------------------#
 function download_prometheus() {
 	local target_location=${1-'/usr/local/bin/prometheus'}
 	local cache_location=${2-'/opt/pkg/prometheus'}
-	local prometheus_version=${3-'2.8.0'}
+	local prometheus_version=${3-'2.14.0'}
 
 	# if exact same version already in target location, skip
 	if [[ -x ${target_location} ]]; then

@@ -23,13 +23,13 @@ PROG_NAME="$(basename $0)"
 # Desc: Guarantee a usable node_exporter in ${target_location}
 # Arg1: target node_exporter location      (/usr/local/bin/node_exporter)
 # Arg2: cache  node_exporter location      (/opt/pkg/node_exporter)
-# Arg3: node_exporter version to download  (0.17.0)
+# Arg3: node_exporter version to download  (0.18.1)
 # Note: Run this as root
 #--------------------------------------------------------------#
 function download_node_exporter() {
     local target_location=${1-'/usr/local/bin/node_exporter'}
     local cache_location=${2-'/opt/pkg/node_exporter'}
-    local node_exporter_version=${3-'0.17.0'}
+    local node_exporter_version=${3-'0.18.1'}
 
     # if exact same version already in target location, skip
     if [[ -x ${target_location} ]]; then

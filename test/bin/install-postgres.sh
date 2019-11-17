@@ -27,7 +27,7 @@ function usage(){
 		install-postgres.sh  -- install postgresql on local machine
 	
 	SYNOPSIS
-		install-postgres.sh [db_version=11] [dbsu=postgres]
+		install-postgres.sh [db_version=12] [dbsu=postgres]
 	
 	DESCRIPTION
 		optimize some os parameters
@@ -249,18 +249,17 @@ function optimize_system_parameters(){
 #--------------------------------------------------------------#
 # Name: install_postgresql
 # Desc: install pg on given major version (latest minor version)
-# Arg1: major version: 9.6,10,11,  default is 11
+# Arg1: major version: 10,11,12  default is 12
 # Arg1: pgdata database cluster dir default = /pg/data
 # Note: CentOS6 / CentOS7 only
 #--------------------------------------------------------------#
 function install_postgresql(){
-    local db_version=${1-'11'}
+    local db_version=${1-'12'}
     local major_version="${db_version:0:3}" # e.g: 9.6 10 11
     local short_version="$(echo $db_version | awk -F'.' '{print $1$2}')" # e.g: 93 96 10 11
 
-    local rpm_base="http://yum.postgresql.org/${major_version}/redhat/rhel-7Server-$(uname -m)"
-    local pg_rpm="${rpm_base}/pgdg-centos${short_version}-${major_version}-2.noarch.rpm"
-
+    # latest yum for CentOS7: https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    local pg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm"
     echo "info: install rpm: ${pg_rpm}"
     local msg=$(yum install -q -y ${pg_rpm} 2>&1)
     if [[ $? != 0 ]]; then
@@ -273,21 +272,27 @@ function install_postgresql(){
     # echo "info: install dependencies"
     # yum clean all ; yum install -q -y epel-release
     # yum install -q -y uuid readline lz4 nc libxml2 libxslt lsof wget unzip
-
-    echo "info: install postgresql"
+    echo "info: install postgresql $short_version"
     yum install -q -y \
         postgresql"$short_version" \
         postgresql"$short_version"-libs \
+        postgresql"$short_version"-docs \
         postgresql"$short_version"-server \
-        postgresql"$short_version"-contrib \
         postgresql"$short_version"-devel \
-        postgresql"$short_version"-debuginfo\
+        postgresql"$short_version"-contrib \
+        postgresql"$short_version"-llvmjit \
+        postgresql"$short_version"-debuginfo \
+        postgresql"$short_version"-test \
         pgbouncer \
-        pg_top"$short_version" \
-        pg_repack"$short_version"
+        python2-psycopg2
+        # postgis30_"$short_version" \
+        # postgis30_"$short_version"-client \
+        # postgis30_"$short_version"-devel \
+        # postgis30_"$short_version"-utils \
+        # pg_top"$short_version" \
+        # pg_repack"$short_version"
         # pgpool-II-"$short_version" \
-        # postgis2_"$short_version" \
-        # postgis2_"$short_version"-client \
+
 
     if [[ $? != 0 ]]; then
         echo "error: install postgresql packages failed $?"
@@ -350,7 +355,7 @@ function install_postgresql(){
 #                            Main                              #
 #==============================================================#
 # Args:
-#   -v  [db version]  default is 11
+#   -v  [db version]  default is 12
 #   -u  [db user   ]  default is postgres
 #
 # Code:
@@ -364,7 +369,7 @@ function install_postgresql(){
 #   7   install postgresql failed
 #==============================================================#
 function main(){
-    local pg_version='11'
+    local pg_version='12'
     local pg_user='postgres'
 
     while (( $# > 0)); do

@@ -167,7 +167,7 @@ function init_pg_hba_conf(){
     # if found user provided version, use it instead
     if [[ -f ${check_path} ]]; then
         echo "info: found ${check_path}, overwrite to ${conf_path}"
-        [[ -f ${conf_path} ]] && mv -f ${conf_path} $(dirname ${conf_path})/ph_hba.conf.old
+        [[ -f ${conf_path} ]] && mv -f ${conf_path} $(dirname ${conf_path})/pg_hba.conf.old
         cp -f ${check_path} ${conf_path}
         return 0
     fi
@@ -186,8 +186,8 @@ function init_pg_hba_conf(){
 # Note: this function is idempotent
 #--------------------------------------------------------------#
 function init_recovery_conf(){
-    local conf_path=${1-'/pg/data/recovery.conf'}
-    local check_path=${2-'/opt/conf/recovery.conf'}
+    local conf_path=${1-'/pg/data/restore.conf'}
+    local check_path=${2-'/opt/conf/restore.conf'}
     local apply_delay=${3-'0'}
 
     # if found user provided version, use it instead (note this is offline)
@@ -207,7 +207,7 @@ function init_recovery_conf(){
 	archive_cleanup_command = '/usr/pgsql/bin/pg_archivecleanup -x .gz /pg/arcwal %r'
 	recovery_target_timeline = 'latest'
 	recovery_min_apply_delay = '${apply_delay}'
-	trigger_file = '/pg/promote'
+	promote_trigger_file = '/pg/promote'
 
 	#recovery_end_command = ''
 	#recovery_target = 'immediate'
@@ -455,7 +455,7 @@ function main(){
     [[ $? != 0 ]] && return $?
     #--------------------------------------------#
     echo "info: init-offline (5/9) init_recovery_conf"
-    init_recovery_conf ${pgdata}/recovery.conf /opt/conf/recovery.conf ${apply_delay}
+    init_recovery_conf ${pgdata}/restore.conf /opt/conf/restore.conf ${apply_delay}
     [[ $? != 0 ]] && return $?
     #--------------------------------------------#
     echo "info: init-offline (6/9) launch_walarchiver"

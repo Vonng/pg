@@ -167,7 +167,7 @@ function init_pg_hba_conf(){
     # if found user provided version, use it instead
     if [[ -f ${check_path} ]]; then
         echo "info: found ${check_path}, overwrite to ${conf_path}"
-        [[ -f ${conf_path} ]] && mv -f ${conf_path} $(dirname ${conf_path})/ph_hba.conf.old
+        [[ -f ${conf_path} ]] && mv -f ${conf_path} $(dirname ${conf_path})/pg_hba.conf.old
         cp -f ${check_path} ${conf_path}
         return 0
     fi
@@ -186,8 +186,8 @@ function init_pg_hba_conf(){
 # Note: this function is idempotent
 #--------------------------------------------------------------#
 function init_recovery_conf(){
-    local conf_path=${1-'/pg/data/recovery.conf'}
-    local check_path=${2-'/opt/conf/recovery.conf'}
+    local conf_path=${1-'/pg/data/restore.conf'}
+    local check_path=${2-'/opt/conf/restore.conf'}
     local application_name=${3-'standby'}
 
     # if found user provided version, use it instead (note this is standby)
@@ -210,7 +210,7 @@ function init_recovery_conf(){
 
 	# ADDITIONAL RECOVERY CONF
 	recovery_target_timeline = 'latest'
-	trigger_file = '/pg/promote'
+	promote_trigger_file = '/pg/promote'
 	#restore_command ='gzcat /pg/arcwal/%f 1> %p 2> /pg/log/restore.log'
 	#archive_cleanup_command = '/usr/pgsql/bin/pg_archivecleanup -x .gz /pg/arcwal %r'
 	#recovery_min_apply_delay = '0'
@@ -410,7 +410,7 @@ function main(){
     [[ $? != 0 ]] && return $?
     #--------------------------------------------#
     echo "info: init-standby (5/8) init_recovery_conf"
-    init_recovery_conf ${pgdata}/recovery.conf /opt/conf/recovery.conf ${application_name}
+    init_recovery_conf ${pgdata}/restore.conf /opt/conf/recovery.conf ${application_name}
     [[ $? != 0 ]] && return $?
     #--------------------------------------------#
     echo "info: init-standby (6/8) launch_postgresql"

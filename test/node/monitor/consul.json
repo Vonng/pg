@@ -2,7 +2,7 @@
   "datacenter": "dc",
   "node_name": "primary.meta.pg",
   "data_dir": "/var/lib/consul",
-  "bind_addr": "10.10.10.20",
+  "bind_addr": "10.10.10.13",
   "retry_join": ["primary.test.pg","primary.meta.pg"],
   "log_level": "INFO",
   "server": true,

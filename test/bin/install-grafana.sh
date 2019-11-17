@@ -23,12 +23,12 @@ PROG_NAME="$(basename $0)"
 # Name: download_grafana
 # Desc: Guarantee a usable grafana in ${target_location}
 # Arg1: cache  grafana location  (/opt/pkg/grafana.rpm)
-# Arg2: grafana version to download  (6.0.0-1)
+# Arg2: grafana version to download  (6.4.4-1)
 # Note: Run this as root
 #--------------------------------------------------------------#
 function install_grafana() {
     local cache_location=${1-'/opt/pkg/grafana.rpm'}
-    local grafana_version=${2-'6.0.0-1'}
+    local grafana_version=${2-'6.4.4-1'}
     local grafana_filename="grafana-${grafana_version}.x86_64.rpm"
     local target_location="/tmp/${grafana_filename}"
 
