@@ -196,7 +196,7 @@ PostgresExporter默认会从以下系统视图中收集指标
 
 
 
-```
+```yaml
 # Generic metrics
 pg:
   query: "SELECT pg_is_in_recovery()::integer       as in_recovery,
