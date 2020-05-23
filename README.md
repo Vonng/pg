@@ -33,13 +33,13 @@
 
 这里将介绍基于Prometheus，Grafana开发的Postgres监控系统 —— Pigsty (Postgres In Grafana Style)
 
-- [ ] 数据库集群管理概念与实体命名规范
+- [ ] [数据库集群管理概念与实体命名规范](mon/entity-and-naming.md)
 - [ ] [Pigsty监控系统架构](mon/pigsty-overview.md)
 - [ ] [Pigsty监控系统使用说明](mon/pigsty-introduction.md)
 - [ ] 服务发现
 - [ ] Consul使用指南
 
-**Metrics / 监控指标**
+**Metrics / 监控指标**
 
 - [ ] [Node监控指标概览]
 - [ ] [Postgres监控指标]
