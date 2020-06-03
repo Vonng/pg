@@ -9,8 +9,6 @@ Pigsty是一个基于Grafana与Prometheus与Consul的Postgres监管系统
 
 
 
-
-
 ## 整体架构
 
 > TLDR: (Node/Pg/Pgbouncer) Exporter Discovered by Consul to Prometheus to Grafana
