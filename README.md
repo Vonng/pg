@@ -93,7 +93,7 @@
 - [x] [PostgreSQL日志配置](admin/logging.md)
 - [x] [PostgreSQL复制方案](admin/replication-plan.md)
 - [x] [PostgreSQL备份方案](admin/backup-plan.md)
-- [x] [PostgreSQL监控系统]((mon/overview.md))
+- [x] [PostgreSQL监控系统](mon/overview.md)
 - [x] [PostgreSQL报警系统](admin/alert-overview.md)
 - [x] [PostgreSQL变更管理方案](admin/mange-change.md)
 - [x] [PostgreSQL目录设计](admin/directory-design.md)
