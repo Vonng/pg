@@ -1,14 +1,3 @@
----
-author: "Vonng"
-description: "区块链与分布式数据库"
-date: "2018-04-30"
-categories: ["DB"]
-tags: ["Database","Blockchain"]
-type: "post"
----
-
-
-
 ## 区块链与分布式数据库
 
 **区块链的本质，想提供的功能，及其演化方向，就是分布式数据库。**

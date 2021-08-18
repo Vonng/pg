@@ -5,6 +5,5 @@
 其中1~3为简单系统，4-6为中等系统，7-9为复杂系统。
 
 
-
 ![](../img/architecture-maturity-model.png)
 
