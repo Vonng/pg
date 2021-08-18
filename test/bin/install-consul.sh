@@ -24,13 +24,13 @@ PROG_NAME="$(basename $0)"
 # Desc: Guarantee a usable consul in ${target_location}
 # Arg1: target consul location      (/usr/local/bin/consul)
 # Arg2: cache consul location       (/opt/pkg/consul)
-# Arg3: consul version to download  (1.4.2)
+# Arg3: consul version to download  (1.6.1)
 # Note: Run this as root
 #--------------------------------------------------------------#
 function download_consul() {
     local target_location=${1-'/usr/local/bin/consul'}
     local cache_location=${2-'/opt/pkg/consul'}
-    local consul_version=${3-'1.4.2'}
+    local consul_version=${3-'1.6.1'}
 
     # if exact same version already in target location, skip
     if [[ -x ${target_location} ]]; then

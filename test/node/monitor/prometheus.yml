@@ -14,7 +14,7 @@ scrape_configs:
 - job_name: 'consul'
   consul_sd_configs:
     - server: 'localhost:8500'
-      tag: exporter
+      tags: ['exporter']
 
   relabel_configs:
     - source_labels: [ '__meta_consul_node' ]

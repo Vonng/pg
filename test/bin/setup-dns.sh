@@ -37,25 +37,29 @@ function setup_dns() {
 	cat >> /etc/hosts <<- EOF
 	# pgtest dns entries
 	10.10.10.10   test001m01
+	10.10.10.10   n1
 	10.10.10.10   primary
 	10.10.10.10   primary.test
 	10.10.10.10   primary.test.pg
 
-	10.10.10.10   test001s01
+	10.10.10.11   test001s01
+	10.10.10.11   n2
 	10.10.10.11   standby
 	10.10.10.11   standby.test
 	10.10.10.11   standby.test.pg
 
-	10.10.10.10   test001o01
+	10.10.10.12   test001o01
+	10.10.10.12   n3
 	10.10.10.12   offline
 	10.10.10.12   offline.test
 	10.10.10.12   offline.test.pg
 
-	10.10.10.10   meta001m01
-	10.10.10.20   meta
-	10.10.10.20   primary.meta
-	10.10.10.20   primary.meta.pg
-	10.10.10.20   monitor
+	10.10.10.13   meta001m01
+	10.10.10.13   n4
+	10.10.10.13   meta
+	10.10.10.13   primary.meta
+	10.10.10.13   primary.meta.pg
+	10.10.10.13   monitor
 	EOF
 
    if [[ $? != 0 ]]; then

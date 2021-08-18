@@ -32,8 +32,9 @@ function download_utils(){
     local major_version="${db_version:0:3}" # e.g: 9.6 10 11
     local short_version="$(echo $db_version | awk -F'.' '{print $1$2}')" # e.g: 93 96 10 11
 
-    local rpm_base="http://yum.postgresql.org/${major_version}/redhat/rhel-7Server-$(uname -m)"
-    local pg_rpm="${rpm_base}/pgdg-centos${short_version}-${major_version}-2.noarch.rpm"
+    
+    # latest yum for CentOS7: https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    local pg_rpm="https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm"
 
     echo "info: install rpm: ${pg_rpm}"
     yum install -q -y ${pg_rpm}

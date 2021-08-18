@@ -20,7 +20,7 @@ PROG_NAME="$(basename $0)"
 
 
 function download_alertmanager() {
-    local ver=${1-'0.16.1'}
+    local ver=${1-'0.19.0'}
 
     # if exact same version already in target location, skip
     if [[ -x alertmanager ]]; then
@@ -52,7 +52,7 @@ function download_alertmanager() {
 
 
 function download_prometheus() {
-    local ver=${1-'2.7.2'}
+    local ver=${1-'2.14.0'}
 
     # if exact same version already in target location, skip
     if [[ -x prometheus ]]; then
@@ -85,7 +85,7 @@ function download_prometheus() {
 
 
 function download_grafana(){
-    local ver=${1-'6.0.1-1'}
+    local ver=${1-'6.4.4-1'}
     local filename="grafana-${ver}.x86_64.rpm"
     local url="https://dl.grafana.com/oss/release/${filename}"
 
@@ -149,7 +149,7 @@ function download_walarchiver() {
 
     # otherwise, download from github
     if ! wget ${download_location} 2> /dev/null; then
-        echo 'error: download prometheus failed'
+        echo 'error: download walarchiver failed'
         return 2
     fi
 
@@ -164,7 +164,7 @@ function download_walarchiver() {
 
 
 function download_postgres_exporter() {
-    local ver=${1-'0.4.7'}
+    local ver=${1-'0.7.0'}
 
     # if exact same version already in target location, skip
     if [[ -x postgres_exporter ]]; then
@@ -195,7 +195,7 @@ function download_postgres_exporter() {
 
 
 function download_consul() {
-    local ver=${1-'1.4.3'}
+    local ver=${1-'1.6.1'}
 
     # if exact same version already in target location, skip
     if [[ -x consul ]]; then
@@ -226,7 +226,7 @@ function download_consul() {
 
 
 function download_node_exporter() {
-    local ver=${3-'0.17.0'}
+    local ver=${3-'0.18.1'}
 
     # if exact same version already in target location, skip
     if [[ -x node_exporter ]]; then

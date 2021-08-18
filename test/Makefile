@@ -13,6 +13,12 @@ init: initdb deploy
 halt:
 	vagrant halt
 
+sync:
+	ssh primary sudo ntpdate -u time.pool.aliyun.com
+	ssh standby sudo ntpdate -u time.pool.aliyun.com
+	ssh offline sudo ntpdate -u time.pool.aliyun.com
+	ssh monitor sudo ntpdate -u time.pool.aliyun.com
+
 initdb:
 	ssh primary sudo -iu postgres /opt/bin/init-primary.sh 'postgres://replicator:replicating@standby.test.pg:5432/test'
 	ssh standby sudo -iu postgres /opt/bin/init-standby.sh 'postgres://replicator:replicating@primary.test.pg:5432/test?application_name=standby'

@@ -159,7 +159,7 @@ function init_pg_hba_conf(){
     # if found user provided version, use it instead
     if [[ -f ${check_path} ]]; then
         echo "info: found ${check_path}, overwrite to ${conf_path}"
-        [[ -f ${conf_path} ]] && mv -f ${conf_path} $(dirname ${conf_path})/ph_hba.conf.old
+        [[ -f ${conf_path} ]] && mv -f ${conf_path} $(dirname ${conf_path})/pg_hba.conf.old
         cp -f ${check_path} ${conf_path}
         return 0
     fi

@@ -1,6 +1,6 @@
 # PG
 
-> PostgreSQL是个好数据库
+> Postgres is good
 >
 > —— Vonng
 
@@ -8,29 +8,84 @@
 
 
 
-## 文章
+## Posts / 文章
 
 - [x] [计算机系为什么要学数据库原理和设计？](misc/why-learn-database.md)
 - [x] [PG好处都有啥？](misc/pg-yoxi.md)
 - [x] [PostgreSQL开发规约](misc/pg-convention.md)
 - [x] [并发异常那些事](src/concurrent-control.md)
-- [x] [容器中的数据库是一个好主意吗？](misc/postgres-in-docker.md) / [Docker vs Bare Metal](misc/docker-vs-bare-metal.md)
+- [x] [容器中的数据库是一个好主意吗？](misc/postgres-in-docker.md) 
+- [x]  [Thou shalt not run a prod database inside a container](misc/docker-vs-bare-metal.md) (..but now I change my mind!)
 - [x] [理解时间](sql/reason-about-time.md)
 - [x] [区块链与分布式数据库](misc/blockchain-and-database.md)
 - [x] [一致性：一个过载的术语](misc/consistency-linearizability.md)
 - [x] [架构演化：成熟度模型](misc/maturity-model.md)
+- [x] [PostgreSQL的KPI](mon/pg-load.md)
 
 
 
-## 环境
+## Monitor / 监控
 
-PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
+> 数据库没有监控系统，就像蒙着眼睛狂奔。
+>
+> Run database without a monitoring system is like running while blindfloded 
 
-常用PostgreSQL运维脚本：[test/bin](test/bin/)
+**Monitor system / 监控系统**
+
+这里将介绍基于Prometheus，Grafana开发的Postgres监控系统 —— Pigsty (Postgres In Grafana Style)
+
+- [x] [数据库集群管理概念与实体命名规范](mon/entity-and-naming.md)
+- [ ] [Pigsty监控系统架构](mon/pigsty-overview.md)
+- [ ] [Pigsty监控系统使用说明](mon/pigsty-introduction.md)
+- [ ] 服务发现
+- [ ] Consul使用指南
+
+**Metrics / 监控指标**
+
+- [ ] [Node监控指标概览]
+- [ ] [Postgres监控指标]
+- [ ] [Pgbouncer中间件监控指标]
+- [ ] [监控指标的聚合方式]
+- [ ] [Prometheus指标预处理规则]
+- [ ] [Prometheus机器报警规则]
+- [ ] [Prometheus数据库报警规则]
+- [ ] [黄金监控指标：PG Load]
+- [ ] 9.4到13的监控指标变化梳理
 
 
 
-## 管理
+
+
+**Catalog Monitoring / 监控系统目录**
+
+- [x] [监控PG中表的大小](mon/size.md)
+- [x] [监控WAL生成速率](mon/wal-rate.md)
+- [x] [关系膨胀：监控与处理](mon/bloat.md)
+- [x] [PG中表占用磁盘空间](mon/size.md)
+- [x] [使用pg_repack整理表与索引](tools/pg_repack.md)
+- [ ] [监控表：空间，膨胀，年龄，IO](mon/table-bloat.md)
+- [ ] [监控索引：空间，膨胀，重复，闲置](mon/index-bloat.md)
+- [ ] 静态监控，配置项与角色
+- [ ] 轻重缓急，快慢分离
+- [ ] 操作系统监控
+- [ ] 监控CPU使用
+- [ ] 监控磁盘网络IO
+- [ ] 监控数据库基本指标
+- [ ] 监控死锁
+- [ ] 监控连接
+- [ ] 监控活动
+- [ ] 监控复制延迟
+- [ ] 系统级别监控
+- [ ] 监控函数：调用量，时间
+- [ ] 监控连接池：QPS，延迟，排队，连接
+- [ ] 监控自动清理与检查点
+- [ ] 系统视图详解
+- [ ] 系统水位测量、经验值
+- [ ] [确保表没有访问](mon/table-have-access.md)
+
+## Administration / 管理
+
+> 当一个人能完成所有工作时，他是不需要管理的。
 
 **管理方案**
 
@@ -76,37 +131,11 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
   
 
 **扩展性**
+
 - [ ] 垂直拆分，分库分表
 - [ ] 水平拆分与分片
 - [ ] 如何管理几百个PostgreSQL实例
   
-
-**监控**
-
-- [x] [监控PG中表的大小](mon/size.md)
-- [x] [监控WAL生成速率](mon/wal-rate.md)
-- [x] [关系膨胀：监控与处理](mon/bloat.md)
-- [x] [PG中表占用磁盘空间](mon/size.md)
-- [x] [使用pg_repack整理表与索引](tools/pg_repack.md)
-- [ ] [监控表：空间，膨胀，年龄，IO](mon/table-bloat.md)
-- [ ] [监控索引：空间，膨胀，重复，闲置](mon/index-bloat.md)
-- [ ] 静态监控，配置项与角色
-- [ ] 轻重缓急，快慢分离
-- [ ] 操作系统监控
-- [ ] 监控CPU使用
-- [ ] 监控磁盘网络IO
-- [ ] 监控数据库基本指标
-- [ ] 监控死锁
-- [ ] 监控连接
-- [ ] 监控活动
-- [ ] 监控复制延迟
-- [ ] 系统级别监控
-- [ ] 监控函数：调用量，时间
-- [ ] 监控连接池：QPS，延迟，排队，连接
-- [ ] 监控自动清理与检查点
-- [ ] 系统视图详解
-- [ ] 系统水位测量、经验值
-- [ ] [判断表已经没有访问的方法](mon/table-have-access.md)
 
 [**故障**](pit/)
 
@@ -130,7 +159,7 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 
 
-## 开发
+## Development / 开发
 
 **案例**
 
@@ -162,7 +191,6 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 - [ ] Sequence的方方面面
 - [ ] 常见索引类型及其应用场景
 - [ ] PostgreSQL中的JOIN
-- [ ] 
 - [ ] 子查询还是CTE？
 - [ ] LATERAL JOIN
 - [ ] DISTINCT ON子句与除重
@@ -186,7 +214,9 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 
 
-## 原理
+## Kernel / 内核原理
+
+> 
 
 - [x] [PostgresSQL变更数据捕获](src/logical-decoding.md)
 - [x] [PostgreSQL前后端协议概述](src/wire-protocol.md)
@@ -208,7 +238,7 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 
 
-## 工具
+## Tools / 工具
 
 **命令行**
 
@@ -234,9 +264,10 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 **网络**
 
-* [使用Wireshark抓包分析PostgreSQL协议](tools/wireshark-capture.md)
+- [ ] [使用Wireshark抓包分析PostgreSQL协议](tools/wireshark-capture.md)
 
 **性能测试**
+
 - [ ] pgbench
 - [ ] [sysbench](tools/sysbench.md)
 
@@ -263,8 +294,6 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 - [ ] [PipelineDB安装](tools/pipeline-intro.md)
 
-- [ ] Citus安装
-
 - [ ] [PgAdmin Server 安装](tools/pgadmin-install.md)
 
 - [ ] [PgBackRest 中文文档](tools/pgbackrest.md)
@@ -273,20 +302,18 @@ PostgreSQL虚拟机测试集群搭建：[test](test/README.md)
 
 
 
-## 参考文档
+## Reference
 
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/current/index.html)
-  - [Current](https://www.postgresql.org/docs/current/index.html) ([11](https://www.postgresql.org/docs/11/index.html)) / [10](https://www.postgresql.org/docs/10/index.html) / [9.6](https://www.postgresql.org/docs/9.6/index.html) / [9.5](https://www.postgresql.org/docs/9.5/index.html) / [9.4](https://www.postgresql.org/docs/9.4/index.html) / [12beta](https://www.postgresql.org/docs/devel/index.html)
+  - [Current](https://www.postgresql.org/docs/current/index.html)  [13](https://www.postgresql.org/docs/13/index.html) /  [12](https://www.postgresql.org/docs/12/index.html)  /  [11](https://www.postgresql.org/docs/11/index.html)  /  [10](https://www.postgresql.org/docs/10/index.html)  /  [9.6](https://www.postgresql.org/docs/9.6/index.html)  /  [9.5](https://www.postgresql.org/docs/9.5/index.html)  /  [9.4](https://www.postgresql.org/docs/9.4/index.html) 
 
-* [PostgreSQL 中文文档](http://www.postgres.cn/docs/11/)
-  * [11](http://www.postgres.cn/docs/11/) / [10](http://www.postgres.cn/docs/10/)  / [9.6](http://www.postgres.cn/docs/9.6/) / (Docs4Dev- PostgresQL 11](https://www.docs4dev.com/docs/zh/postgre-sql/11.2/reference/bookindex.html)
+* [PostgreSQL 中文文档](http://www.postgres.cn/docs/12/)
 * [PostgreSQL Commit Fest](https://commitfest.postgresql.org)
+* [PostGIS 3.0 Documentation](https://postgis.net/docs/manual-3.0/)
 
-- [PostGIS 2.5 Documentation](https://postgis.net/docs/manual-2.5/)
-- [Citus Documentation](https://docs.citusdata.com/en/v8.0/)
-- [TimescaleDB Documentation](https://docs.timescale.com/v1.0/main)
+- [Citus Documentation](http://docs.citusdata.com/en/v9.3/)
+- [TimescaleDB Documentation](https://docs.timescale.com/latest/main)
 - [PipelineDB Documentation](http://docs.pipelinedb.com)
 - [Pgbouncer Documentation](https://pgbouncer.github.io/config.html)
-- [PgPool-II Documentation](http://www.pgpool.net/docs/latest/en/html/)
 - [PG-INTERNAL](http://www.interdb.jp/pg/)
 

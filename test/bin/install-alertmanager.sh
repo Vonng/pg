@@ -29,7 +29,7 @@ PROG_NAME="$(basename $0)"
 function download_alertmanager() {
 	local target_location=${1-'/usr/local/bin/alertmanager'}
 	local cache_location=${2-'/opt/pkg/alertmanager'}
-	local ver=${3-'0.16.1'}
+	local ver=${3-'0.19.0'}
 
 	# if exact same version already in target location, skip
 	if [[ -x ${target_location} ]]; then
