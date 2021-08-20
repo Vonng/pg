@@ -2,9 +2,9 @@
 
 > Postgres is good
 >
-> —— Vonng
+> —— [Vonng](https://vonng.com)
 
-
+[Github Pages](https://pg.vonng.com)
 
 ## Posts / 文章
 
@@ -28,7 +28,6 @@
 - [ ] 开箱即用的PostgreSQL发行版 —— Pigsty
 - [ ] 什么才是数据库领域真正的痛点、痒点、爽点？
 - [ ] 论开源生态 —— 以PostgreSQL为例
-- [ ] 论开源生态 —— 以PostgreSQL为例
 
 ----------------
 
@@ -40,8 +39,7 @@
 
 **Monitor system / 监控系统**
 
-这里将介绍基于Prometheus，Grafana开发的Postgres监控系统 —— Pigsty (Postgres In Grafana Style)
-
+- [ ] Pigsty v1.0.0 监控系统使用说明
 - [x] [数据库集群管理概念与实体命名规范](mon/entity-and-naming.md)
 - [ ] [Pigsty监控系统架构](mon/pigsty-overview.md)
 - [ ] [Pigsty监控系统使用说明](mon/pigsty-introduction.md)
