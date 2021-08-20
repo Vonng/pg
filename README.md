@@ -10,17 +10,17 @@
 
 ## Posts / 文章
 
-- [x] [计算机系为什么要学数据库原理和设计？](misc/why-learn-database.md)
-- [x] [PG好处都有啥？](misc/pg-yoxi.md)
-- [x] [PostgreSQL开发规约](misc/pg-convention.md)
-- [x] [并发异常那些事](src/concurrent-control.md)
-- [x] [容器中的数据库是一个好主意吗？](misc/postgres-in-docker.md) 
-- [x]  [Thou shalt not run a prod database inside a container](misc/docker-vs-bare-metal.md) (..but now I change my mind!)
-- [x] [理解时间](sql/reason-about-time.md)
-- [x] [区块链与分布式数据库](misc/blockchain-and-database.md)
-- [x] [一致性：一个过载的术语](misc/consistency-linearizability.md)
-- [x] [架构演化：成熟度模型](misc/maturity-model.md)
-- [x] [PostgreSQL的KPI](mon/pg-load.md)
+- [ ] [计算机系为什么要学数据库原理和设计？](post/why-learn-database.md)
+- [ ] [PG好处都有啥？](post/pg-yoxi.md)
+- [ ] [PostgreSQL开发规约](post/pg-convention.md)
+- [ ] [并发异常那些事](src/concurrent-control.md)
+- [ ] [容器中的数据库是一个好主意吗？](post/postgres-in-docker.md) 
+- [ ]  [Thou shalt not run a prod database inside a container](post/docker-vs-bare-metal.md) (..but now I change my mind!)
+- [ ] [理解时间](sql/reason-about-time.md)
+- [ ] [区块链与分布式数据库](post/blockchain-and-database.md)
+- [ ] [一致性：一个过载的术语](post/consistency-linearizability.md)
+- [ ] [架构演化：成熟度模型](post/maturity-model.md)
+- [ ] [PostgreSQL的KPI](mon/pg-load.md)
 
 
 
