@@ -6,9 +6,9 @@
 
 
 
-
-
 ## Posts / 文章
+
+> 一些与PostgreSQL、数据库、行业有关的文章……
 
 - [ ] [计算机系为什么要学数据库原理和设计？](post/why-learn-database.md)
 - [ ] [PG好处都有啥？](post/pg-yoxi.md)
@@ -21,14 +21,22 @@
 - [ ] [一致性：一个过载的术语](post/consistency-linearizability.md)
 - [ ] [架构演化：成熟度模型](post/maturity-model.md)
 - [ ] [PostgreSQL的KPI](mon/pg-load.md)
+- [ ] [认识互联网](post/industry/understand-the-internet.md)
+- [ ] [互联网之殇](post/industry/obstacle-of-internet.md)
+- [ ] [互联网之冬](post/industry/winter-of-the-internet.md)
+- [ ] 为什么说PostgreSQL前途无量？
+- [ ] 开箱即用的PostgreSQL发行版 —— Pigsty
+- [ ] 什么才是数据库领域真正的痛点、痒点、爽点？
+- [ ] 论开源生态 —— 以PostgreSQL为例
+- [ ] 论开源生态 —— 以PostgreSQL为例
 
-
+----------------
 
 ## Monitor / 监控
 
 > 数据库没有监控系统，就像蒙着眼睛狂奔。
 >
-> Run database without a monitoring system is like running while blindfloded 
+> Run database without a monitoring system is like running while blindfolded 
 
 **Monitor system / 监控系统**
 
@@ -42,19 +50,15 @@
 
 **Metrics / 监控指标**
 
-- [ ] [Node监控指标概览]
-- [ ] [Postgres监控指标]
-- [ ] [Pgbouncer中间件监控指标]
-- [ ] [监控指标的聚合方式]
-- [ ] [Prometheus指标预处理规则]
-- [ ] [Prometheus机器报警规则]
-- [ ] [Prometheus数据库报警规则]
-- [ ] [黄金监控指标：PG Load]
+- [ ] [Node监控指标概览]()
+- [ ] [Postgres监控指标]()
+- [ ] [Pgbouncer中间件监控指标]()
+- [ ] [监控指标的聚合方式]()
+- [ ] [Prometheus指标预处理规则]()
+- [ ] [Prometheus机器报警规则]()
+- [ ] [Prometheus数据库报警规则]()
+- [ ] [黄金监控指标：PG Load]()
 - [ ] 9.4到13的监控指标变化梳理
-
-
-
-
 
 **Catalog Monitoring / 监控系统目录**
 
@@ -82,6 +86,10 @@
 - [ ] 系统视图详解
 - [ ] 系统水位测量、经验值
 - [ ] [确保表没有访问](mon/table-have-access.md)
+
+
+----------------
+
 
 ## Administration / 管理
 
