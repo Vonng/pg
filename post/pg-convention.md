@@ -1,7 +1,16 @@
-# 探探PostgreSQL规范
+---
+title: "PostgreSQL开发规约"
+linkTitle: "PgSQL开发规约"
+date: 2018-06-20
+author: |
+  [冯若航](http://vonng.com)（[@Vonng](http://vonng.com/en/)）
+description: >
+  没有规矩，不成方圆。
+---
 
-* TanTan DBA Team —— 冯若航
+# PostgreSQL开发规约
 
+> 2018-06-20 [微信公众号原文](https://mp.weixin.qq.com/s/W1hwbl3qmjC4Dcmadc8uSg)
 
 
 ## 0x00背景  
@@ -544,12 +553,6 @@ $function$;
 
 ## 0x05 发布规范
 
-【强制】**严格遵循发布流程**
-
-* https://confluence.p1staff.com/pages/viewpage.action?pageId=6193216
-
-
-
 【强制】 **发布形式**
 
 * 目前以邮件形式提交发布，发送邮件至dba@p1.com 归档并安排提交。
@@ -639,5 +642,4 @@ $function$;
 * 事后建立约束与索引。
 * 调大`maintenance_work_mem`，增大`max_wal_size`。
 * 完成后执行`vacuum verbose analyze table`。
-
 

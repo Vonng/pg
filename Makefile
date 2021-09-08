@@ -1,8 +1,5 @@
-
-default: serve
-
 # serve document with docsify (or python)
 serve:
-	bin/serve
+	./serve
 
-.PHONY: default serve
+.PHONY: serve
