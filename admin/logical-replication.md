@@ -6,7 +6,7 @@ description: >
   本文介绍PostgreSQL 13中逻辑复制的相关原理，以及最佳实践。
 ---
 
-
+# Postgres逻辑复制详解
 
 ## 逻辑复制
 

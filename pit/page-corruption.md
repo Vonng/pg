@@ -8,7 +8,7 @@ description: >
   采用二进制编辑的方式修复PostgreSQL数据页，以及如何让一条主键查询出现两条记录来。
 ---
 
-
+# PostgreSQL数据页面损坏修复
 
 
 

@@ -8,7 +8,7 @@ description: >
   复制是系统架构中的核心问题之一。
 ---
 
-
+# PostgreSQL标准复制方案
 
 复制是系统架构中的核心问题之一。
 
@@ -24,7 +24,7 @@ description: >
 
 依照R和O的挂载目标不同，复制拓扑关系有以下几种选择：
 
-![](/img/blog/replication-topo.png)
+![](../img/replication-topo.png)
 
 
 
@@ -36,11 +36,11 @@ description: >
 
 
 
-![](/img/blog/replication-topo-good.png)
+![](../img/replication-topo-good.png)
 
 
 
-![](/img/blog/backup-types.png)
+![](../img/backup-types.png)
 
 
 

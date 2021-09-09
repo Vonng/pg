@@ -1,3 +1,5 @@
+# GIN索引关键词匹配的时间复杂度为什么是O(n2)
+
 Here is the detail of why that query have O(N^2) inside GIN implementation.
 
 ## Details

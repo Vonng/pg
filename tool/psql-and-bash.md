@@ -7,9 +7,10 @@ description: >
   一些PostgreSQL与Bash交互的技巧。
 ---
 
+# Bash与psql小技巧
 
 
-一些PostgreSQL与Bash交互的技巧。
+> 2018-04-07 一些PostgreSQL与Bash交互的技巧。
 
 
 

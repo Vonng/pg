@@ -11,7 +11,7 @@ description: >
 
 # 数据库集群管理概念与实体命名规范
 
-> 2020-06-03
+> 2020-06-03 [微信公众号原文](https://mp.weixin.qq.com/s/_C6cxh1e-pxqB_6viJPa8w)
 
 > 名之则可言也，言之则可行也。
 
@@ -21,7 +21,7 @@ description: >
 
 ## TL;DR
 
-![entity-naming.png](/img/blog/entity-naming.png)
+![entity-naming.png](../img/entity-naming.png)
 
 * **集群（Cluster）**是基本自治单元，由用户指定唯一标识，表达业务含义，作为顶层命名空间。
 * 集群在硬件层面上包含一系列的**节点（Node）**，即物理机，虚机（或Pod），可以通过IP唯一标识。
@@ -201,10 +201,4 @@ Node的名称会在集群资源分配阶段确定下来，每个节点都会分�
 命名属于相当经验性的知识，很少有地方会专门会讲这件事。这种“细节”其实往往能体现出命名者的一些经验水平来。
 
 标识对象不仅仅可以通过ID和名称，还可以通过标签（Label）和选择器（Selector）。实际上这一种做法会更具有通用性和灵活性，本系列下一篇文章（也许）将会介绍数据库对象的标签设计与管理。
-
-
-
-
-
-
-> [微信公众号原文](https://mp.weixin.qq.com/s/_C6cxh1e-pxqB_6viJPa8w)
+ 

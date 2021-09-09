@@ -7,7 +7,7 @@ description: >
   PipelineDB是PostgreSQL的一个扩展插件，提供流式数据处理的相关功能。
 ---
 
-
+# PipelineDB快速上手
 
 ## PipelineDB安装与配置
 

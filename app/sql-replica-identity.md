@@ -8,7 +8,7 @@ description: >
   复制标识很重要，它关系到逻辑复制的成败
 ---
 
-
+# PostgreSQL复制标识详解
 
 
 

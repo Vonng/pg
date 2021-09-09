@@ -6,6 +6,7 @@ tags: ["PostgreSQL","Bash"]
 type: "post"
 ---
 
+PostgreSQL权限管理
 
 
 

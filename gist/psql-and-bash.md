@@ -7,10 +7,9 @@ description: >
   一些PostgreSQL与Bash交互的技巧。
 ---
 
-
+# Bash与psql小技巧
 
 一些PostgreSQL与Bash交互的技巧。
-
 
 
 ## 使用严格模式编写Bash脚本

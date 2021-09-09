@@ -7,6 +7,8 @@ description: >
   Exclude约束是一个PostgreSQL扩展，它可以实现一些更高级，更巧妙的的数据库约束。
 ---
 
+# PostgreSQL Excluded 约束详解
+
 Exclude约束是一个PostgreSQL扩展，它可以实现一些更高级，更巧妙的的数据库约束。
 
 ## 前言

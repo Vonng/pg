@@ -7,7 +7,7 @@ description: >
   Pgbouncer是一个轻量级的数据库连接池，这里简单介绍Pgbouncer的配置、管理与使用。
 ---
 
-
+# Pgbouncer快速上手
 
 Pgbouncer是一个轻量级的数据库连接池。
 
