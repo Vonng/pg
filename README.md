@@ -21,13 +21,15 @@
 ### [**行业认知**](post/industry/)
 - [认识互联网](post/industry/understand-the-internet.md)
 - [互联网之殇](post/industry/obstacle-of-internet.md)
-
+- [是时候和GPL协议说再见了【译】](post/goodbye-gpl.md)
 
 ### **技术文章**
 - [为什么要学数据库原理和设计？](post/why-learn-database.md)
 - [将PostgreSQL容器化是个好主意吗？](post/postgres-in-docker.md) | [EN](post/postgres-in-docker-en.md)
 - [理解字符编码](post/character-encoding.md)
 - [理解时间](post/reason-about-time.md)
+
+
 
 ### **概念辨析**
 - [区块链与分布式数据库](post/blockchain-and-database.md)
