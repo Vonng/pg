@@ -153,6 +153,7 @@
 - [故障档案：从删库到跑路](pit/drop-database.md)
 - [Template0的清理与修复](pit/vacuum-template0.md)
 - [内存错误导致操作系统丢弃页面缓存](pit/drop-cache.md)
+- [查询参数溢出BIGINT范围导致的雪崩](pit/query-bigint-overflow.md)
 - 磁盘写满故障
 - 救火：杀查询的正确姿势
 - 存疑事务：提交日志损坏问题分析与修复
@@ -195,14 +196,8 @@
 - [FileFDW妙用无穷——从数据库读取系统信息](arch/file_fdw-intro.md)
 - [RedisFDW Installation](arch/install-redis-fdw.md)
 - [MongoFDW Installation](arch/install-mongo-fdw.md)
+- [MongoFDW安装](install-mongo-fdw.md)
 
-
-
-[MongoFDW安装](install-mongo-fdw.md)
-
-[](install-pipelinedb.md)
-[](install-postgis.md)
-[](install-redis-fdw.md)
 
 
 --------------------

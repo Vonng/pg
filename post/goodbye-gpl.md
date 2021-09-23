@@ -26,7 +26,7 @@
 - 而那些运行在你自己的电脑上的软件，即使软件供应商破产了，它也可以继续运行，直到永远。（如果软件不再与你的操作系统兼容，你也可以在虚拟机和模拟器中运行它，当然前提是它不需要联络服务器来检查许可证）。例如，互联网档案馆有一个[超过10万个历史软件](https://archive.org/details/softwarelibrary)的软件集锦，你可以在浏览器中的模拟器里运行！相比之下，如果云软件被关闭，你没有办法保存它，因为你从来就没有服务端软件的副本，无论是源代码还是编译后的形式。
 - 20世纪90年代，无法定制或扩展你所使用的软件的问题，在云软件中进一步加剧。对于在你自己的电脑上运行的闭源软件，至少有人可以对它的数据文件格式进行逆向工程，这样你还可以把它加载到其他的替代软件里（例如[OOXML](https://en.wikipedia.org/wiki/Office_Open_XML)之前的微软Office文件格式，或者[规范](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/)发布前的Photoshop文件）。有了云软件，甚至连这个都做不到了，因为数据只存储在云端，而不是你自己电脑上的文件。
 
-如果所有的软件都是免费和开源的，这些问题就都解决了。然而，开源实际上并不是解决云软件问题的必要条件；即使是闭源软件也可以避免上述问题，只要它运行在你自己的电脑上，而不是供应商的云服务器上。请注意，互联网档案馆能够在没有源代码的情况下维持历史软件的正常运行：如果只是出于存档的目的，在模拟器中运行编译后的机器代码就够了。也许拥有源码会让事情更容易一些，但这并不是不关键，最重要的事情，还是要有一份软件的副本。
+如果所有的软件都是免费和开源的，这些问题就都解决了。然而，开源实际上并不是解决云软件问题的必要条件；即使是闭源软件也可以避免上述问题，只要它运行在你自己的电脑上，而不是供应商的云服务器上。请注意，互联网档案馆能够在没有源代码的情况下维持历史软件的正常运行：如果只是出于存档的目的，在模拟器中运行编译后的机器代码就够了。也许拥有源码会让事情更容易一些，但这并不是关键，最重要的事情，还是要有一份软件的副本。
 
 ## 本地优先的软件
 
@@ -78,20 +78,21 @@ GPL和其他 copyleft 许可证并不坏，我只是认为它们毫无意义。�
 6. copyleft: https://en.wikipedia.org/wiki/Copyleft
 7. 衍生作品的定义：https://en.wikipedia.org/wiki/Derivative_work
 8. x.ai被Bizzabo收购：https://ourincrediblejourney.tumblr.com/
-9. Google Account Suspended No Reason Given：https://www.paullimitless.com/google-account-suspended-no-reason-given/
-10. Google暂停用户账户：https://twitter.com/Demilogic/status/1358661840402845696
-11. 互联网历史软件归档：https://archive.org/details/softwarelibrary
-12. Office Open XML：https://en.wikipedia.org/wiki/Office_Open_XML
-13. Photoshop File Formats Specification：https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/
-14. 本地优先软件：https://www.inkandswitch.com/local-first.html
-15. AGPL协议：https://en.wikipedia.org/wiki/Affero_General_Public_License
-16. Elastic商业许可证：https://www.elastic.co/cn/pricing/faq/licensing
-17. 数据可移植权：https://ico.org.uk/for-organisations/guide-to-data-protection/guide-to-the-general-data-protection-regulation-gdpr/individual-rights/right-to-data-portability/
-18. 谷歌Takeout（带走你的数据）：https://en.wikipedia.org/wiki/Google_Takeout
-19. 互操作性新闻：https://interoperability.news/
-20. 欧盟开源软件采购指南：https://joinup.ec.europa.eu/sites/default/files/document/2011-12/OSS-procurement-guideline%20-final.pdf
-21. 许可证兼容性：https://gplv3.fsf.org/wiki/index.php/Compatible_licenses
-22. MongoDB SSPL协议FAQ：https://gplv3.fsf.org/wiki/index.php/Compatible_licenses
-23. Elastic许可变更问题汇总：https://gplv3.fsf.org/wiki/index.php/Compatible_licenses
-24. “自由软件”：一个过时的想法：https://r0ml.medium.com/free-software-an-idea-whose-time-has-passed-6570c1d8218a
-25. 一条FSF未曾设想的路：https://lu.is/blog/2021/04/07/values-centered-npos-with-kmaher/
+9. 被Google搞死的产品：https://killedbygoogle.com/
+10. Google Account Suspended No Reason Given：https://www.paullimitless.com/google-account-suspended-no-reason-given/
+11. Google暂停用户账户：https://twitter.com/Demilogic/status/1358661840402845696
+12. 互联网历史软件归档：https://archive.org/details/softwarelibrary
+13. Office Open XML：https://en.wikipedia.org/wiki/Office_Open_XML
+14. Photoshop File Formats Specification：https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/
+15. 本地优先软件：https://www.inkandswitch.com/local-first.html
+16. AGPL协议：https://en.wikipedia.org/wiki/Affero_General_Public_License
+17. Elastic商业许可证：https://www.elastic.co/cn/pricing/faq/licensing
+18. 数据可移植权：https://ico.org.uk/for-organisations/guide-to-data-protection/guide-to-the-general-data-protection-regulation-gdpr/individual-rights/right-to-data-portability/
+19. 谷歌Takeout（带走你的数据）：https://en.wikipedia.org/wiki/Google_Takeout
+20. 互操作性新闻：https://interoperability.news/
+21. 欧盟开源软件采购指南：https://joinup.ec.europa.eu/sites/default/files/document/2011-12/OSS-procurement-guideline%20-final.pdf
+22. 许可证兼容性：https://gplv3.fsf.org/wiki/index.php/Compatible_licenses
+23. MongoDB SSPL协议FAQ：https://gplv3.fsf.org/wiki/index.php/Compatible_licenses
+24. Elastic许可变更问题汇总：https://gplv3.fsf.org/wiki/index.php/Compatible_licenses
+25. “自由软件”：一个过时的想法：https://r0ml.medium.com/free-software-an-idea-whose-time-has-passed-6570c1d8218a
+26. 一条FSF未曾设想的路：https://lu.is/blog/2021/04/07/values-centered-npos-with-kmaher/
