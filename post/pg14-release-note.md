@@ -9,13 +9,11 @@ description: >
 
 
 
-
-- [1. Overview](https://www.postgresql.org/docs/14/release-14.html#id-1.11.6.5.3)
-- [2. Migration to Version 14](https://www.postgresql.org/docs/14/release-14.html#id-1.11.6.5.4)
-- [3. Changes](https://www.postgresql.org/docs/14/release-14.html#id-1.11.6.5.5)
-- [4. Acknowledgments](https://www.postgresql.org/docs/14/release-14.html#RELEASE-14-ACKNOWLEDGEMENTS)
+# PG14 RC新特性
 
 **Release date:** 2021-??-?? (AS OF 2021-09-18)
+
+原文：https://www.postgresql.org/docs/14/release-14.html
 
 
 

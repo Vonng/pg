@@ -245,6 +245,7 @@
 - 为分区表添加索引
 - 利用统计信息分批实现大表全表更新
 - [如何在LB后面获取客户端真实IP](gist/toa-get-client-ip-behind-lb.md)
+- [PostgreSQL 14 Release Note](post/pg14-release-note.md)
 
 ### **工具组件**
 
