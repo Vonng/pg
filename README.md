@@ -22,6 +22,7 @@
 - [认识互联网](post/industry/understand-the-internet.md)
 - [互联网之殇](post/industry/obstacle-of-internet.md)
 - [是时候和GPL协议说再见了【译】](post/goodbye-gpl.md)
+- [大众传媒对政权组织方法与行为逻辑的影响](post/industry/media.md)
 
 ### **技术文章**
 - [为什么要学数据库原理和设计？](post/why-learn-database.md)
