@@ -56,13 +56,13 @@ Pigsty是一个基于Grafana与Prometheus与Consul的Postgres监管系统
 
 
 
-一个简单的故障分析案例：[PaymentDB从库慢查询雪崩](https://dba.p1staff.com/d/pg-query/pg-query?orgId=1&var-ins=pg-payment-tt-1&var-datname=putong-payment&var-query=2135801846&var-seq=1&var-cls=pg-payment-tt&var-role=standby&var-ip=10.189.11.22&var-node=11.slave.paymentdb1.tt.bjs.p1staff.com&from=1590400130793&to=1590408640477)
+一个简单的故障分析案例：PaymentDB从库慢查询雪崩
 
-一个简单的性能优化案例：[Followshipshard慢查询优化](https://dba.p1staff.com/d/pg-query/pg-query?orgId=1&var-ins=pg-followshipshard2-tt-1&var-datname=putong-followship-shard&var-query=2948990270&from=1589857472572&to=1590029998721)
+一个简单的性能优化案例：Followshipshard慢查询优化
 
 
 
-## 监控介绍：[DB监控首页](https://dba.p1staff.com/d/home)
+## 监控介绍：DB监控首页
 
 包含PG和Redis两部分，左侧为全局指标概览，右侧为集群导航。中间为全局报警与事件提醒。
 
